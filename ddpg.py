@@ -99,16 +99,28 @@ class DDPG:
         self.critic.load_state_dict(global_model.critic.state_dict())
 
     def reproj_categorical_dist(self, target_z_dist, rewards, terminates):
+        # bp()
         batch_size = rewards.shape[0]
         m_prob = np.zeros((batch_size, self.n_atoms))
 
+    ###
         for i in range(batch_size):
-            for j in range(self.n_atoms):
-                tz = min(self.v_max, max(self.v_min, rewards[i] + self.gamma * (1 - terminates[i]) * self.bin_centers[j]))
-                bj = (tz - self.v_min) / self.delta
-                m_l, m_u = math.floor(bj), math.ceil(bj)
-                m_prob[i][int(m_l)] += target_z_dist[i][j] * (m_u - bj)
-                m_prob[i][int(m_u)] += target_z_dist[i][j] * (bj - m_l)
+            # bp()
+            tz = np.minimum(self.v_max, np.maximum(self.v_min, rewards[i] + self.gamma * (1 - terminates[i][0]) * self.bin_centers.T))
+            bj = (tz - self.v_min) / self.delta
+            m_l, m_u = np.floor(bj), np.ceil(bj)
+            m_prob[i, m_l.astype(int)] += target_z_dist[i] * (m_u - bj)
+            m_prob[i, m_u.astype(int)] += target_z_dist[i] * (bj - m_l)
+    ##
+
+
+        # for i in range(batch_size):
+        #     for j in range(self.n_atoms):
+        #         tz = min(self.v_max, max(self.v_min, rewards[i] + self.gamma * (1 - terminates[i]) * self.bin_centers[j]))
+        #         bj = (tz - self.v_min) / self.delta
+        #         m_l, m_u = math.floor(bj), math.ceil(bj)
+        #         m_prob[i][int(m_l)] += target_z_dist[i][j] * (m_u - bj)
+        #         m_prob[i][int(m_u)] += target_z_dist[i][j] * (bj - m_l)
         return m_prob
 
     def train(self, global_model):

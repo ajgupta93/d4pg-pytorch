@@ -20,7 +20,7 @@ parser.add_argument('--tau', default=0.001, type=float, help='moving average for
 parser.add_argument('--ou_theta', default=0.15, type=float, help='noise theta')
 parser.add_argument('--ou_sigma', default=0.2, type=float, help='noise sigma')
 parser.add_argument('--ou_mu', default=0.0, type=float, help='noise mu')
-parser.add_argument('--bsize', default=64, type=int, help='minibatch size')
+parser.add_argument('--bsize', default=1, type=int, help='minibatch size')
 parser.add_argument('--discount', default=0.9, type=float, help='')
 parser.add_argument('--env', default='Pendulum-v0', type=str, help='Environment to use')
 parser.add_argument('--max_steps', default=500, type=int, help='Maximum steps per episode')
@@ -38,7 +38,7 @@ parser.add_argument('--warmup', default=10000, type=int, help='time without trai
 
 args = parser.parse_args()
 
-env = NormalizeAction(gym.make(args.env))
+env = NormalizeAction(gym.make(args.env).env)
 discrete = isinstance(env.action_space, gym.spaces.Discrete)
 
 # Get observation and action space dimensions
