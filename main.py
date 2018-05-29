@@ -45,6 +45,12 @@ discrete = isinstance(env.action_space, gym.spaces.Discrete)
 obs_dim = env.observation_space.shape[0]
 act_dim = env.action_space.n if discrete else env.action_space.shape[0]
 
+critic_dist_info = {}
+critic_dist_info['type']     = 'categorical'
+critic_dist_info['v_min']    = -1000
+critic_dist_info['v_max']    = 0
+critic_dist_info['n_atoms'] = 51
+
 class Worker(object):
     def __init__(self, name, optimizer_global_actor, optimizer_global_critic):
         self.env = NormalizeAction(gym.make(args.env))
@@ -52,7 +58,7 @@ class Worker(object):
         self.name = name
 
         self.ddpg = DDPG(obs_dim=obs_dim, act_dim=act_dim, env=self.env, memory_size=args.rmsize,\
-                          batch_size=args.bsize, tau=args.tau)
+                          batch_size=args.bsize, tau=args.tau, critic_dist_info = critic_dist_info)
         self.ddpg.assign_global_optimizer(optimizer_global_actor, optimizer_global_critic)
         print('Intialized worker :',self.name)
 
@@ -114,21 +120,22 @@ class Worker(object):
 
 if __name__ == '__main__':
     global_ddpg = DDPG(obs_dim=obs_dim, act_dim=act_dim, env=env, memory_size=args.rmsize,\
-                        batch_size=args.bsize, tau=args.tau)
+                        batch_size=args.bsize, tau=args.tau, critic_dist_info=critic_dist_info)
     optimizer_global_actor = SharedAdam(global_ddpg.actor.parameters(), lr=1e-4)
     optimizer_global_critic = SharedAdam(global_ddpg.critic.parameters(), lr=1e-3)
 
-    optimizer_global_actor.share_memory()
-    optimizer_global_critic.share_memory()
+    # optimizer_global_actor.share_memory()
+    # optimizer_global_critic.share_memory()
     global_ddpg.share_memory()
 
-
-    processes = []
-    for i in range(args.n_workers):
-      worker = Worker(str(i), optimizer_global_actor, optimizer_global_critic)
-      p = mp.Process(target=worker.work, args=[global_ddpg])
-      p.start()
-      processes.append(p)
-
-    for p in processes:
-        p.join()
+    worker = Worker(str(1), optimizer_global_actor, optimizer_global_critic)
+    worker.work(global_ddpg)
+#    processes = []
+#    for i in range(args.n_workers):
+#      worker = Worker(str(i), optimizer_global_actor, optimizer_global_critic)
+#      p = mp.Process(target=worker.work, args=[global_ddpg])
+#      p.start()
+#      processes.append(p)
+#
+#    for p in processes:
+#        p.join()

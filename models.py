@@ -46,23 +46,36 @@ class actor(nn.Module):
 # to formulate your critic.forward() accordingly
 
 class critic(nn.Module):
-    def __init__(self, state_size, action_size, output_size):
+    def __init__(self, state_size, action_size, dist_info):
         super(critic, self).__init__()
+        self.dist_info = dist_info
+
         self.fc1 = nn.Linear(state_size, 300)
         #self.bn1 = nn.BatchNorm1d(300)
         self.fc2 = nn.Linear(300 + action_size, 300)
-        self.fc3 = nn.Linear(300, output_size)
+
+        if self.dist_info['type'] == 'categorical':
+            self.fc3 = nn.Linear(300, self.dist_info['n_atoms'])
+        elif self.dist_info['type'] == 'mixture_of_gaussian':
+            # TODO
+            pass
+
         self.init_weights()
-    
+
     def init_weights(self, init_w=10e-3):
         self.fc1.weight.data = fanin_init(self.fc1.weight.data.size())
         self.fc2.weight.data = fanin_init(self.fc2.weight.data.size())
         self.fc3.weight.data.normal_(0, 3e-4)
-        
+
+
     def forward(self, state, action):
         out = self.fc1(state)
         #out = self.bn1(out)
         out = F.relu(out)
-        out = F.relu(self.fc2(torch.cat([out,action],1)))
-        qvalue = self.fc3(out)
-        return qvalue
+        out = F.relu(self.fc2(torch.cat([out, action], 1)))
+        if self.dist_info['type'] == 'categorical':
+            out = F.softmax(self.fc3(out), dim=1)   # Probability distribution over n_atom q_values
+        elif self.dist_info['type'] == 'mixture_of_gaussian':
+            # TODO
+            pass        # Predict mean and variance of gaussian distributions
+        return out
