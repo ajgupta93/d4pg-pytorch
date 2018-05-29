@@ -105,7 +105,7 @@ class DDPG:
 
     ###
         for i in range(batch_size):
-            # bp()
+#            bp()
             tz = np.minimum(self.v_max, np.maximum(self.v_min, rewards[i] + self.gamma * (1 - terminates[i][0]) * self.bin_centers.T))
             bj = (tz - self.v_min) / self.delta
             m_l, m_u = np.floor(bj), np.ceil(bj)
@@ -138,7 +138,8 @@ class DDPG:
         if self.dist_type == 'categorical':
             reprojected_dist = self.reproj_categorical_dist(target_z_dist.cpu().data.numpy(), rewards, terminates)
             #qdist_loss = self.critic_loss(q_dist, to_tensor(reprojected_dist, requires_grad=False))
-            qdist_loss = -(to_tensor(reprojected_dist, requires_grad=False)*torch.log(q_dist)).mean()
+            # qdist_loss = -(to_tensor(reprojected_dist, requires_grad=False)*torch.log(q_dist)).mean()
+            qdist_loss = -(to_tensor(reprojected_dist, requires_grad=False)*q_dist).mean()
         elif self.dist_type == 'mixture_of_gaussian':
             # TODO
             pass
