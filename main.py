@@ -12,7 +12,7 @@ from pdb import set_trace as bp
 parser = argparse.ArgumentParser(description='async_ddpg')
 
 #parser.add_argument('--seed', type=int, default=1, help='random seed (default: 1)')
-parser.add_argument('--n_workers', type=int, default=2, help='how many training processes to use (default: 4)')
+parser.add_argument('--n_workers', type=int, default=4, help='how many training processes to use (default: 4)')
 parser.add_argument('--rmsize', default=50000, type=int, help='memory size')
 #parser.add_argument('--init_w', default=0.003, type=float, help='')
 #parser.add_argument('--window_length', default=1, type=int, help='')
@@ -49,7 +49,7 @@ act_dim = env.action_space.n if discrete else env.action_space.shape[0]
 critic_dist_info = {}
 critic_dist_info['type']     = 'categorical'
 critic_dist_info['v_min']    = -1000
-critic_dist_info['v_max']    = 0
+critic_dist_info['v_max']    = 100
 critic_dist_info['n_atoms'] = 51
 
 class Worker(object):
