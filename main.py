@@ -20,7 +20,7 @@ parser.add_argument('--tau', default=0.001, type=float, help='moving average for
 parser.add_argument('--ou_theta', default=0.15, type=float, help='noise theta')
 parser.add_argument('--ou_sigma', default=0.2, type=float, help='noise sigma')
 parser.add_argument('--ou_mu', default=0.0, type=float, help='noise mu')
-parser.add_argument('--bsize', default=1, type=int, help='minibatch size')
+parser.add_argument('--bsize', default=64, type=int, help='minibatch size')
 parser.add_argument('--discount', default=0.9, type=float, help='')
 parser.add_argument('--env', default='Pendulum-v0', type=str, help='Environment to use')
 parser.add_argument('--max_steps', default=500, type=int, help='Maximum steps per episode')
@@ -28,6 +28,7 @@ parser.add_argument('--n_eps', default=2000, type=int, help='Maximum number of e
 parser.add_argument('--debug', default=True, type=bool, help='Print debug statements')
 #parser.add_argument('--epsilon', default=10000, type=int, help='linear decay of exploration policy')
 parser.add_argument('--warmup', default=10000, type=int, help='time without training but only filling the replay memory')
+parser.add_argument('--p_replay', default=True, type=bool, help='Enable prioritized replay - based on TD error')
 #parser.add_argument('--prate', default=0.0001, type=float, help='policy net learning rate (only for DDPG)')
 #parser.add_argument('--rate', default=0.001, type=float, help='learning rate')
 #parser.add_argument('--load_weights', dest="load_weights", action='store_true', help='load weights for actor and critic')
@@ -53,15 +54,17 @@ critic_dist_info['n_atoms'] = 51
 
 class Worker(object):
     def __init__(self, name, optimizer_global_actor, optimizer_global_critic):
-        self.env = NormalizeAction(gym.make(args.env))
+        self.env = NormalizeAction(gym.make(args.env).env)
         self.env._max_episode_steps = args.max_steps
         self.name = name
 
         self.ddpg = DDPG(obs_dim=obs_dim, act_dim=act_dim, env=self.env, memory_size=args.rmsize,\
-                          batch_size=args.bsize, tau=args.tau, critic_dist_info = critic_dist_info)
+                          batch_size=args.bsize, tau=args.tau, critic_dist_info=critic_dist_info, \
+                          prioritized_replay=args.p_replay)
         self.ddpg.assign_global_optimizer(optimizer_global_actor, optimizer_global_critic)
         print('Intialized worker :',self.name)
 
+    # warmup function not used <- deprecated
     def warmup(self):
         n_steps = 0
         self.ddpg.actor.eval()
@@ -73,7 +76,7 @@ class Worker(object):
         for n_steps in range(args.warmup):
             action = np.random.uniform(-1.0, 1.0, size=act_dim)
             next_state, reward, done, _ = self.env.step(action)
-            self.ddpg.replayBuffer.append(state, action, reward, done)
+            self.ddpg.replayBuffer.add(state, action, reward, next_state, done)
 
             if done:
                 state = self.env.reset()
@@ -84,7 +87,7 @@ class Worker(object):
     def work(self, global_ddpg):
         avg_reward = 0.
         n_steps = 0
-        #self.warmup()
+        self.warmup()
 
         self.ddpg.sync_local_global(global_ddpg)
         self.ddpg.hard_update()
@@ -99,7 +102,7 @@ class Worker(object):
                 action = to_numpy(self.ddpg.actor(to_tensor(state))).reshape(-1, ) + noise
                 next_state, reward, done, _ = self.env.step(action)
                 total_reward += reward
-                self.ddpg.replayBuffer.add_experience(state.reshape(-1), action, reward, next_state, done)
+                self.ddpg.replayBuffer.add(state.reshape(-1), action, reward, next_state, done)
                 #self.ddpg.replayBuffer.append(state.reshape(-1), action, reward, done)
 
                 self.ddpg.actor.train()
@@ -128,14 +131,17 @@ if __name__ == '__main__':
     # optimizer_global_critic.share_memory()
     global_ddpg.share_memory()
 
-    worker = Worker(str(1), optimizer_global_actor, optimizer_global_critic)
-    worker.work(global_ddpg)
-#    processes = []
-#    for i in range(args.n_workers):
-#      worker = Worker(str(i), optimizer_global_actor, optimizer_global_critic)
-#      p = mp.Process(target=worker.work, args=[global_ddpg])
-#      p.start()
-#      processes.append(p)
-#
-#    for p in processes:
-#        p.join()
+    multiThread = True
+    if not multiThread:
+        worker = Worker(str(1), optimizer_global_actor, optimizer_global_critic)
+        worker.work(global_ddpg)
+    else:
+        processes = []
+        for i in range(args.n_workers):
+            worker = Worker(str(i), optimizer_global_actor, optimizer_global_critic)
+            p = mp.Process(target=worker.work, args=[global_ddpg])
+            p.start()
+            processes.append(p)
+
+        for p in processes:
+            p.join()

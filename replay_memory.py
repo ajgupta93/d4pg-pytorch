@@ -290,7 +290,7 @@ class Replay(object):
         self.env = env
         self.initialize(init_length=1000)
 
-    def add_experience(self, state, action, reward, next_state, done):
+    def add(self, state, action, reward, next_state, done):
         if len(self.buffer) < self.capacity:
             self.buffer.append(None)
         self.buffer[self.position] = (np.asarray(state), action, reward,\
@@ -302,7 +302,7 @@ class Replay(object):
         while True:
             action = np.random.uniform(-1.0, 1.0, size=self.env.action_space.shape)
             next_state, reward, done, _ = self.env.step(action)
-            self.add_experience(state, action, reward, next_state, done)
+            self.add(state, action, reward, next_state, done)
             if len(self.buffer) >= init_length:
                 break
             if done:

@@ -8,10 +8,13 @@ from random_process import OrnsteinUhlenbeckProcess
 from utils import *
 from replay_memory import Replay#SequentialMemory as Replay
 from pdb import set_trace as bp
+from prioritized_replay_memory import PrioritizedReplayBuffer, LinearSchedule
 
 class DDPG:
+    replayBuffer = None  # type: Replay
+
     def __init__(self, obs_dim, act_dim, env, memory_size=50000, batch_size=64,\
-                 lr_critic=1e-3, lr_actor=1e-4, gamma=0.99, tau=0.001,\
+                 lr_critic=1e-3, lr_actor=1e-4, gamma=0.99, tau=0.001, prioritized_replay=True,\
                  critic_dist_info=None):
         
         self.gamma          = gamma
@@ -64,9 +67,21 @@ class DDPG:
         # noise
         self.noise = OrnsteinUhlenbeckProcess(dimension=act_dim, num_steps=5000)
 
-        # replay buffer 
-        #self.replayBuffer = Replay(self.memory_size, window_length=1)
-        self.replayBuffer = Replay(self.memory_size, self.env)
+        # replay buffer
+        self.prioritized_replay = prioritized_replay
+        if self.prioritized_replay:
+            # Open AI prioritized replay memory
+            self.replayBuffer = PrioritizedReplayBuffer(self.memory_size, alpha=0.6)
+            prioritized_replay_beta0 = 0.4  # type: float
+            prioritized_replay_beta_iters  = 100000
+            self.beta_schedule = LinearSchedule(prioritized_replay_beta_iters,\
+                                                initial_p=prioritized_replay_beta0,\
+                                                final_p=1.0)
+            self.prioritized_replay_eps = 1e-6
+        else:
+            #self.replayBuffer = Replay(self.memory_size, window_length=1) #  <- Keras RL replay memory
+            self.replayBuffer = Replay(self.memory_size, self.env)         #<- self implemented memory buffer
+
 
     def hard_update(self):
         self.actor_target.load_state_dict(self.actor.state_dict())
@@ -104,42 +119,57 @@ class DDPG:
         m_prob = np.zeros((batch_size, self.n_atoms))
 
     ###
-        for i in range(batch_size):
+        # for i in range(batch_size):
 #            bp()
-            tz = np.minimum(self.v_max, np.maximum(self.v_min, rewards[i] + self.gamma * (1 - terminates[i][0]) * self.bin_centers.T))
-            bj = (tz - self.v_min) / self.delta
-            m_l, m_u = np.floor(bj), np.ceil(bj)
-            m_prob[i, m_l.astype(int)] += target_z_dist[i] * (m_u - bj)
-            m_prob[i, m_u.astype(int)] += target_z_dist[i] * (bj - m_l)
+#             tz = np.minimum(self.v_max, np.maximum(self.v_min, rewards[i] + self.gamma * (1 - terminates[i][0]) * self.bin_centers.T))
+#             bj = (tz - self.v_min) / self.delta
+#             m_l, m_u = np.floor(bj), np.ceil(bj)
+#             m_prob[i, m_l.astype(int)] += target_z_dist[i] * (m_u - bj)
+#             m_prob[i, m_u.astype(int)] += target_z_dist[i] * (bj - m_l)
     ##
 
 
-        # for i in range(batch_size):
-        #     for j in range(self.n_atoms):
-        #         tz = min(self.v_max, max(self.v_min, rewards[i] + self.gamma * (1 - terminates[i]) * self.bin_centers[j]))
-        #         bj = (tz - self.v_min) / self.delta
-        #         m_l, m_u = math.floor(bj), math.ceil(bj)
-        #         m_prob[i][int(m_l)] += target_z_dist[i][j] * (m_u - bj)
-        #         m_prob[i][int(m_u)] += target_z_dist[i][j] * (bj - m_l)
+        for i in range(batch_size):
+            for j in range(self.n_atoms):
+                tz = min(self.v_max, max(self.v_min, rewards[i] + self.gamma * (1 - terminates[i]) * self.bin_centers[j]))
+                bj = (tz - self.v_min) / self.delta
+                m_l, m_u = math.floor(bj), math.ceil(bj)
+                m_prob[i][int(m_l)] += target_z_dist[i][j] * (m_u - bj)
+                m_prob[i][int(m_u)] += target_z_dist[i][j] * (bj - m_l)
         return m_prob
+
+    def sample(self, batch_size=None):
+        weights = None
+        batch_idxes = None
+        if self.prioritized_replay:
+            experience = self.replayBuffer.sample(batch_size, beta=self.beta_schedule.value())
+            (states, actions, rewards, next_states, terminates, weights, batch_idxes) = experience
+        else:
+            # weights and batch_idxes = None: for non-prioritized_replay_buffer
+            states, actions, rewards, next_states, terminates = self.replayBuffer.sample(self.batch_size)
+        return states, actions, rewards, next_states, terminates, weights, batch_idxes
+
 
     def train(self, global_model):
         # sample from Replay
         #states, actions, rewards, next_states, terminates = self.replayBuffer.sample_and_split(self.batch_size)
-        states, actions, rewards, next_states, terminates = self.replayBuffer.sample(self.batch_size)
+        # weights and batch_inxes = None for non-prioritized_replay_buffer
+        # bp()
+        states, actions, rewards, next_states, terminates, weights, batch_idxes = self.sample(self.batch_size)
 
         # update critic (create target for Q function)
         target_z_dist = self.critic_target(to_tensor(next_states, volatile=True),\
                                             self.actor_target(to_tensor(next_states, volatile=True)))
         q_dist = self.critic(to_tensor(states), to_tensor(actions))  # n_sample, n_atoms
-        # bp()
 
         qdist_loss = None#dummy variable to remove redundant warnings
         if self.dist_type == 'categorical':
             reprojected_dist = self.reproj_categorical_dist(target_z_dist.cpu().data.numpy(), rewards, terminates)
             #qdist_loss = self.critic_loss(q_dist, to_tensor(reprojected_dist, requires_grad=False))
             # qdist_loss = -(to_tensor(reprojected_dist, requires_grad=False)*torch.log(q_dist)).mean()
-            qdist_loss = -(to_tensor(reprojected_dist, requires_grad=False)*q_dist).mean()
+            td_errors = -(to_tensor(reprojected_dist, requires_grad=False) * q_dist)
+            td_errors = td_errors.sum(dim=1)
+            qdist_loss = td_errors.mean()
         elif self.dist_type == 'mixture_of_gaussian':
             # TODO
             pass
@@ -167,3 +197,8 @@ class DDPG:
 
         # soft-update of target
         self.update_target_parameters()
+
+        if self.prioritized_replay:         # update priorities
+            new_priorities = np.abs(to_numpy(td_errors)) + self.prioritized_replay_eps
+            # bp()
+            self.replayBuffer.update_priorities(batch_idxes, new_priorities)
