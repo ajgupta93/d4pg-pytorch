@@ -185,7 +185,7 @@ class DDPG:
         if self.dist_type == 'categorical':
             reprojected_dist = self.reproj_categorical_dist(target_z_dist.cpu().data.numpy(), rewards, terminates)
             #qdist_loss = self.critic_loss(q_dist, to_tensor(reprojected_dist, requires_grad=False))
-            qdist_loss = -(to_tensor(reprojected_dist, requires_grad=False)*torch.log(q_dist)).sum(dim=1).mean()
+            qdist_loss = -(to_tensor(reprojected_dist, requires_grad=False)*torch.log(q_dist+1e-05)).sum(dim=1).mean()
             td_errors = -(to_tensor(reprojected_dist, requires_grad=False) * q_dist)
             td_errors = td_errors.sum(dim=1)
             #qdist_loss = td_errors.mean()

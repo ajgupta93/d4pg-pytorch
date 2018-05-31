@@ -15,7 +15,7 @@ parser = argparse.ArgumentParser(description='async_ddpg')
 
 #parser.add_argument('--seed', type=int, default=1, help='random seed (default: 1)')
 parser.add_argument('--n_workers', type=int, default=4, help='how many training processes to use (default: 4)')
-parser.add_argument('--rmsize', default=50000, type=int, help='memory size')
+parser.add_argument('--rmsize', default=1000000, type=int, help='memory size')
 #parser.add_argument('--init_w', default=0.003, type=float, help='')
 #parser.add_argument('--window_length', default=1, type=int, help='')
 parser.add_argument('--tau', default=0.001, type=float, help='moving average for target network')
@@ -51,8 +51,8 @@ act_dim = env.action_space.n if discrete else env.action_space.shape[0]
 
 critic_dist_info = {}
 critic_dist_info['type']     = 'categorical'
-critic_dist_info['v_min']    = -1000
-critic_dist_info['v_max']    = 100
+critic_dist_info['v_min']    = -100.0
+critic_dist_info['v_max']    = 500.0
 critic_dist_info['n_atoms'] = 51
 
 
@@ -88,8 +88,8 @@ def global_model_eval(global_model, global_count):
                 break
             else:
                 state = next_state
-        global_returns.append((counter, 0.95*global_returns[-1][1] + 0.05*curr_return))
-        print("Global Steps: ", counter, "Global return: ", global_returns[-1][1])
+        global_returns.append((counter, 0.95*global_returns[-1][1] + 0.05*curr_return, curr_return))
+        print("Global Steps: ", counter, "Global return: ", global_returns[-1][1], "Current return: ", curr_return)
 
         time.sleep(10)
 
@@ -102,7 +102,7 @@ class Worker(object):
         self.name = name
         self.ddpg = DDPG(obs_dim=obs_dim, act_dim=act_dim, env=self.env, memory_size=args.rmsize,\
                           batch_size=args.bsize, tau=args.tau, critic_dist_info=critic_dist_info, \
-                          prioritized_replay=True)
+                          prioritized_replay=args.p_replay)
         self.ddpg.assign_global_optimizer(optimizer_global_actor, optimizer_global_critic)
         print('Intialized worker :',self.name)
 
@@ -141,7 +141,7 @@ class Worker(object):
 
                 state = state.reshape(1, -1)
                 noise = self.ddpg.noise.sample()
-                action = to_numpy(self.ddpg.actor(to_tensor(state))).reshape(-1, ) + noise
+                action = np.clip(to_numpy(self.ddpg.actor(to_tensor(state))).reshape(-1, ) + noise, -1.0, 1.0)
                 next_state, reward, done, _ = self.env.step(action)
                 total_reward += reward
                 self.ddpg.replayBuffer.add(state.reshape(-1), action, reward, next_state, done)
