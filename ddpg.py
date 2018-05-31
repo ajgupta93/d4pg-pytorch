@@ -141,6 +141,7 @@ class DDPG:
     def sample(self, batch_size=None):
         weights = None
         batch_idxes = None
+        # bp()
         if self.prioritized_replay:
             experience = self.replayBuffer.sample(batch_size, beta=self.beta_schedule.value())
             (states, actions, rewards, next_states, terminates, weights, batch_idxes) = experience
@@ -166,10 +167,10 @@ class DDPG:
         if self.dist_type == 'categorical':
             reprojected_dist = self.reproj_categorical_dist(target_z_dist.cpu().data.numpy(), rewards, terminates)
             #qdist_loss = self.critic_loss(q_dist, to_tensor(reprojected_dist, requires_grad=False))
-            # qdist_loss = -(to_tensor(reprojected_dist, requires_grad=False)*torch.log(q_dist)).mean()
+            qdist_loss = -(to_tensor(reprojected_dist, requires_grad=False)*torch.log(q_dist)).sum(dim=1).mean()
             td_errors = -(to_tensor(reprojected_dist, requires_grad=False) * q_dist)
             td_errors = td_errors.sum(dim=1)
-            qdist_loss = td_errors.mean()
+            #qdist_loss = td_errors.mean()
         elif self.dist_type == 'mixture_of_gaussian':
             # TODO
             pass

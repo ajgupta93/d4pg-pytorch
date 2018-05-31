@@ -57,10 +57,10 @@ class Worker(object):
         self.env = NormalizeAction(gym.make(args.env).env)
         self.env._max_episode_steps = args.max_steps
         self.name = name
-
+        # bp()
         self.ddpg = DDPG(obs_dim=obs_dim, act_dim=act_dim, env=self.env, memory_size=args.rmsize,\
                           batch_size=args.bsize, tau=args.tau, critic_dist_info=critic_dist_info, \
-                          prioritized_replay=args.p_replay)
+                          prioritized_replay=True)
         self.ddpg.assign_global_optimizer(optimizer_global_actor, optimizer_global_critic)
         print('Intialized worker :',self.name)
 
@@ -124,8 +124,8 @@ class Worker(object):
 if __name__ == '__main__':
     global_ddpg = DDPG(obs_dim=obs_dim, act_dim=act_dim, env=env, memory_size=args.rmsize,\
                         batch_size=args.bsize, tau=args.tau, critic_dist_info=critic_dist_info)
-    optimizer_global_actor = SharedAdam(global_ddpg.actor.parameters(), lr=1e-4)
-    optimizer_global_critic = SharedAdam(global_ddpg.critic.parameters(), lr=1e-3)
+    optimizer_global_actor = SharedAdam(global_ddpg.actor.parameters(), lr=(1e-4)/float(args.n_workers))
+    optimizer_global_critic = SharedAdam(global_ddpg.critic.parameters(), lr=(1e-3)/float(args.n_workers))
 
     # optimizer_global_actor.share_memory()
     # optimizer_global_critic.share_memory()
