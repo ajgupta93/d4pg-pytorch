@@ -13,11 +13,8 @@ from pdb import set_trace as bp
 # Parameters
 parser = argparse.ArgumentParser(description='async_ddpg')
 
-#parser.add_argument('--seed', type=int, default=1, help='random seed (default: 1)')
 parser.add_argument('--n_workers', type=int, default=4, help='how many training processes to use (default: 4)')
 parser.add_argument('--rmsize', default=1000000, type=int, help='memory size')
-#parser.add_argument('--init_w', default=0.003, type=float, help='')
-#parser.add_argument('--window_length', default=1, type=int, help='')
 parser.add_argument('--tau', default=0.001, type=float, help='moving average for target network')
 parser.add_argument('--ou_theta', default=0.15, type=float, help='noise theta')
 parser.add_argument('--ou_sigma', default=0.2, type=float, help='noise sigma')
@@ -28,16 +25,12 @@ parser.add_argument('--env', default='Pendulum-v0', type=str, help='Environment 
 parser.add_argument('--max_steps', default=500, type=int, help='Maximum steps per episode')
 parser.add_argument('--n_eps', default=2000, type=int, help='Maximum number of episodes')
 parser.add_argument('--debug', default=True, type=bool, help='Print debug statements')
-#parser.add_argument('--epsilon', default=10000, type=int, help='linear decay of exploration policy')
 parser.add_argument('--warmup', default=10000, type=int, help='time without training but only filling the replay memory')
 parser.add_argument('--p_replay', default=True, type=bool, help='Enable prioritized replay - based on TD error')
-#parser.add_argument('--prate', default=0.0001, type=float, help='policy net learning rate (only for DDPG)')
-#parser.add_argument('--rate', default=0.001, type=float, help='learning rate')
-#parser.add_argument('--load_weights', dest="load_weights", action='store_true', help='load weights for actor and critic')
-#parser.add_argument('--shared', dest="shared", action='store_true')
-#parser.add_argument('--use_more_states', dest="use_more_states", action='store_true')
-#parser.add_argument('--num_states', default=4, type=int)
-
+parser.add_argument('--v_min', default=-100.0, type=float, help='Minimum return')
+parser.add_argument('--v_max', default=500.0, type=float, help='Maximum return')
+parser.add_argument('--n_atoms', default=51, type=int, help='Number of bins')
+parser.add_argument('--multithread', default=1, type=int, help='To activate multithread')
 
 args = parser.parse_args()
 
@@ -48,13 +41,6 @@ discrete = isinstance(env.action_space, gym.spaces.Discrete)
 # Get observation and action space dimensions
 obs_dim = env.observation_space.shape[0]
 act_dim = env.action_space.n if discrete else env.action_space.shape[0]
-
-critic_dist_info = {}
-critic_dist_info['type']     = 'categorical'
-critic_dist_info['v_min']    = -100.0
-critic_dist_info['v_max']    = 500.0
-critic_dist_info['n_atoms'] = 51
-
 
 global_returns = [(0, 0)]  # list of tuple(step, return)
 
@@ -106,7 +92,7 @@ class Worker(object):
         self.ddpg.assign_global_optimizer(optimizer_global_actor, optimizer_global_critic)
         print('Intialized worker :',self.name)
 
-    # warmup function not used <- deprecated
+    # warmup function to fill replay buffer initially
     def warmup(self):
         n_steps = 0
         self.ddpg.actor.eval()
@@ -145,7 +131,6 @@ class Worker(object):
                 next_state, reward, done, _ = self.env.step(action)
                 total_reward += reward
                 self.ddpg.replayBuffer.add(state.reshape(-1), action, reward, next_state, done)
-                #self.ddpg.replayBuffer.append(state.reshape(-1), action, reward, done)
 
                 self.ddpg.actor.train()
                 self.ddpg.train(global_ddpg)
@@ -167,17 +152,20 @@ class Worker(object):
 
 
 if __name__ == '__main__':
+
+    critic_dist_info = {'type': 'categorical', \
+                        'v_min': args.v_min, \
+                        'v_max': args.v_max, \
+                        'n_atoms': args.n_atoms}
+
     global_ddpg = DDPG(obs_dim=obs_dim, act_dim=act_dim, env=env, memory_size=args.rmsize,\
                         batch_size=args.bsize, tau=args.tau, critic_dist_info=critic_dist_info)
     optimizer_global_actor = SharedAdam(global_ddpg.actor.parameters(), lr=(1e-4)/float(args.n_workers))
     optimizer_global_critic = SharedAdam(global_ddpg.critic.parameters(), lr=(1e-3)/float(args.n_workers))
 
-    # optimizer_global_actor.share_memory()
-    # optimizer_global_critic.share_memory()
     global_ddpg.share_memory()
 
-    multiThread = True
-    if not multiThread:
+    if not args.multithread:
         worker = Worker(str(1), optimizer_global_actor, optimizer_global_critic)
         worker.work(global_ddpg)
     else:

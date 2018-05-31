@@ -75,7 +75,6 @@ class critic(nn.Module):
         out = F.relu(self.fc2(torch.cat([out, action], 1)))
         if self.dist_info['type'] == 'categorical':
             out = F.softmax(self.fc3(out), dim=1)   # Probability distribution over n_atom q_values
-            #out = nn.LogSoftmax(dim=1)(self.fc3(out))   # Probability distribution over n_atom q_values
         elif self.dist_info['type'] == 'mixture_of_gaussian':
             # TODO
             pass        # Predict mean and variance of gaussian distributions

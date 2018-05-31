@@ -24,6 +24,7 @@ class DDPG:
         self.memory_size    = memory_size
         self.tau            = tau
         self.env            = env
+
         ##   critic_dist_info:
         # dictionary with information about critic output distribution.
         # parameters:
@@ -32,6 +33,7 @@ class DDPG:
         #       a.
         #    if 'mixture_of_gaussian':
         #       b.
+
         self.dist_type = critic_dist_info['type']
         if critic_dist_info['type'] == 'categorical':
             self.v_min = critic_dist_info['v_min']
@@ -79,7 +81,6 @@ class DDPG:
                                                 final_p=1.0)
             self.prioritized_replay_eps = 1e-6
         else:
-            #self.replayBuffer = Replay(self.memory_size, window_length=1) #  <- Keras RL replay memory
             self.replayBuffer = Replay(self.memory_size, self.env)         #<- self implemented memory buffer
 
 
@@ -131,29 +132,6 @@ class DDPG:
         np.add.at(m_prob.reshape(-1), (m_l+offset).reshape(-1),(target_z_dist*(m_u.astype(np.float64) - bj)).reshape(-1))
         np.add.at(m_prob.reshape(-1), (m_u+offset).reshape(-1),(target_z_dist * (bj-m_l.astype(np.float64))).reshape(-1))
 
-        #             m_prob[i, m_l.astype(int)] += target_z_dist[i] * (m_u - bj)
-        #             m_prob[i, m_u.astype(int)] += target_z_dist[i] * (bj - m_l)
-
-
-        ###
-        # for i in range(batch_size):
-#            bp()
-#             tz = np.minimum(self.v_max, np.maximum(self.v_min, rewards[i] + self.gamma * (1 - terminates[i][0]) * self.bin_centers.T))
-#             bj = (tz - self.v_min) / self.delta
-#             m_l, m_u = np.floor(bj), np.ceil(bj)
-#             m_prob[i, m_l.astype(int)] += target_z_dist[i] * (m_u - bj)
-#             m_prob[i, m_u.astype(int)] += target_z_dist[i] * (bj - m_l)
-    ##
-
-
-        # for i in range(batch_size):
-        #     for j in range(self.n_atoms):
-        #         tz = min(self.v_max, max(self.v_min, rewards[i] + self.gamma * (1 - terminates[i]) * self.bin_centers[j]))
-        #         bj = (tz - self.v_min) / self.delta
-        #         m_l, m_u = math.floor(bj), math.ceil(bj)
-        #         m_prob[i][int(m_l)] += target_z_dist[i][j] * (m_u - bj)
-        #         m_prob[i][int(m_u)] += target_z_dist[i][j] * (bj - m_l)
-        # m_prob.reshape((batch_size, self.n_atoms))
         return m_prob
 
     def sample(self, batch_size=None):
@@ -171,9 +149,6 @@ class DDPG:
 
     def train(self, global_model):
         # sample from Replay
-        #states, actions, rewards, next_states, terminates = self.replayBuffer.sample_and_split(self.batch_size)
-        # weights and batch_inxes = None for non-prioritized_replay_buffer
-        # bp()
         states, actions, rewards, next_states, terminates, weights, batch_idxes = self.sample(self.batch_size)
 
         # update critic (create target for Q function)
@@ -181,7 +156,7 @@ class DDPG:
                                             self.actor_target(to_tensor(next_states, volatile=True)))
         q_dist = self.critic(to_tensor(states), to_tensor(actions))  # n_sample, n_atoms
 
-        qdist_loss = None#dummy variable to remove redundant warnings
+        qdist_loss = None #dummy variable to remove redundant warnings
         if self.dist_type == 'categorical':
             reprojected_dist = self.reproj_categorical_dist(target_z_dist.cpu().data.numpy(), rewards, terminates)
             #qdist_loss = self.critic_loss(q_dist, to_tensor(reprojected_dist, requires_grad=False))
