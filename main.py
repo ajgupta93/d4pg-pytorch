@@ -61,6 +61,8 @@ global_returns = [(0, 0)]  # list of tuple(step, return)
 
 def global_model_eval(global_model, global_count):
     temp_model = DDPG(obs_dim=obs_dim, act_dim=act_dim, critic_dist_info=critic_dist_info)
+    env = NormalizeAction(gym.make(args.env).env)
+    env._max_episode_steps = 500
 
     while True:
         counter = to_numpy(global_count)[0]
@@ -71,8 +73,6 @@ def global_model_eval(global_model, global_count):
         temp_model.critic.load_state_dict(global_model.critic.state_dict())
 
         temp_model.actor.eval()
-        env = NormalizeAction(gym.make(args.env).env)
-        env._max_episode_steps = 500
         # bp()
         global global_returns
         state = env.reset()
