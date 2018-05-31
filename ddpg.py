@@ -115,10 +115,27 @@ class DDPG:
 
     def reproj_categorical_dist(self, target_z_dist, rewards, terminates):
         # bp()
+        rewards = rewards.reshape((-1,1))
+        terminates = terminates.reshape((-1, 1))
         batch_size = rewards.shape[0]
         m_prob = np.zeros((batch_size, self.n_atoms))
 
-    ###
+        tz = rewards + self.gamma * (1 - terminates) * self.bin_centers.T
+        tz = np.minimum(self.v_max, np.maximum(self.v_min, tz))
+        bj = (tz - self.v_min) / self.delta
+        m_l, m_u = np.floor(bj).astype(np.int64), np.ceil(bj).astype(np.int64)
+        m_l[(m_u > 0) * (m_l == m_u)] -= 1
+        m_u[(m_l < (self.n_atoms - 1)) * (m_l == m_u)] += 1
+
+        offset = np.linspace(0, (batch_size-1)*self.n_atoms, batch_size).reshape((-1,1)).repeat(self.n_atoms, axis=1).astype(np.int64)
+        np.add.at(m_prob.reshape(-1), (m_l+offset).reshape(-1),(target_z_dist*(m_u.astype(np.float64) - bj)).reshape(-1))
+        np.add.at(m_prob.reshape(-1), (m_u+offset).reshape(-1),(target_z_dist * (bj-m_l.astype(np.float64))).reshape(-1))
+
+        #             m_prob[i, m_l.astype(int)] += target_z_dist[i] * (m_u - bj)
+        #             m_prob[i, m_u.astype(int)] += target_z_dist[i] * (bj - m_l)
+
+
+        ###
         # for i in range(batch_size):
 #            bp()
 #             tz = np.minimum(self.v_max, np.maximum(self.v_min, rewards[i] + self.gamma * (1 - terminates[i][0]) * self.bin_centers.T))
@@ -129,13 +146,14 @@ class DDPG:
     ##
 
 
-        for i in range(batch_size):
-            for j in range(self.n_atoms):
-                tz = min(self.v_max, max(self.v_min, rewards[i] + self.gamma * (1 - terminates[i]) * self.bin_centers[j]))
-                bj = (tz - self.v_min) / self.delta
-                m_l, m_u = math.floor(bj), math.ceil(bj)
-                m_prob[i][int(m_l)] += target_z_dist[i][j] * (m_u - bj)
-                m_prob[i][int(m_u)] += target_z_dist[i][j] * (bj - m_l)
+        # for i in range(batch_size):
+        #     for j in range(self.n_atoms):
+        #         tz = min(self.v_max, max(self.v_min, rewards[i] + self.gamma * (1 - terminates[i]) * self.bin_centers[j]))
+        #         bj = (tz - self.v_min) / self.delta
+        #         m_l, m_u = math.floor(bj), math.ceil(bj)
+        #         m_prob[i][int(m_l)] += target_z_dist[i][j] * (m_u - bj)
+        #         m_prob[i][int(m_u)] += target_z_dist[i][j] * (bj - m_l)
+        # m_prob.reshape((batch_size, self.n_atoms))
         return m_prob
 
     def sample(self, batch_size=None):
