@@ -190,6 +190,8 @@ class Worker(object):
                 self.train_logs['time'].append((datetime.datetime.utcnow()-self.start_time).total_seconds()/60)
                 with open(args.logfile, 'wb') as fHandle:
                     pickle.dump(self.train_logs, fHandle, protocol=pickle.HIGHEST_PROTOCOL)
+                with open(args.logfile_latest, 'wb') as fHandle:
+                    pickle.dump(self.train_logs, fHandle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 if __name__ == '__main__':
@@ -198,6 +200,7 @@ if __name__ == '__main__':
                         'v_min': args.v_min, \
                         'v_max': args.v_max, \
                         'n_atoms': args.n_atoms}
+    args.logfile_latest = args.logfile + '_' + args.env + '_latest' + '.pkl'
     args.logfile = args.logfile + '_' + args.env + '_' + time.strftime("%Y%m%d-%H%M%S") + '.pkl'
 
     global_ddpg = DDPG(obs_dim=obs_dim, act_dim=act_dim, env=env, memory_size=args.rmsize,\
