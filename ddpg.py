@@ -15,9 +15,11 @@ class DDPG:
 
     def __init__(self, obs_dim, act_dim, env = None, memory_size=50000, batch_size=64,\
                  lr_critic=1e-4, lr_actor=1e-4, gamma=0.99, tau=0.001, prioritized_replay=True,\
-                 critic_dist_info=None):
+                 critic_dist_info=None, n_steps=1):
         
         self.gamma          = gamma
+        self.n_steps        = n_steps
+        self.n_step_gamma   = gamma ** self.n_steps
         self.batch_size     = batch_size
         self.obs_dim        = obs_dim
         self.act_dim        = act_dim
@@ -67,7 +69,7 @@ class DDPG:
         self.critic_loss = nn.CrossEntropyLoss()
         
         # noise
-        # self.noise = OrnsteinUhlenbeckProcess(dimension=act_dim, num_steps=5000)
+        #self.noise = OrnsteinUhlenbeckProcess(dimension=act_dim, num_steps=5000)
         self.noise = GaussianNoise(dimension=act_dim, num_epochs=5000)
 
         # replay buffer
@@ -82,7 +84,7 @@ class DDPG:
                                                 final_p=1.0)
             self.prioritized_replay_eps = 1e-6
         else:
-            self.replayBuffer = Replay(self.memory_size, self.env)         #<- self implemented memory buffer
+            self.replayBuffer = Replay(self.memory_size, self.env, n_steps=self.n_steps, gamma=self.gamma)         #<- self implemented memory buffer
 
 
     def hard_update(self):
@@ -122,7 +124,7 @@ class DDPG:
         batch_size = rewards.shape[0]
         m_prob = np.zeros((batch_size, self.n_atoms))
 
-        tz = rewards + self.gamma * (1 - terminates) * self.bin_centers.T
+        tz = rewards + self.n_step_gamma * (1 - terminates) * self.bin_centers.T
         tz = np.minimum(self.v_max, np.maximum(self.v_min, tz))
         bj = (tz - self.v_min) / self.delta
         m_l, m_u = np.floor(bj).astype(np.int64), np.ceil(bj).astype(np.int64)

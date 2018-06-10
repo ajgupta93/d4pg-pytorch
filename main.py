@@ -33,7 +33,7 @@ parser.add_argument('--ou_theta', default=0.15, type=float, help='noise theta')
 parser.add_argument('--ou_sigma', default=0.2, type=float, help='noise sigma')
 parser.add_argument('--ou_mu', default=0.0, type=float, help='noise mu')
 parser.add_argument('--bsize', default=64, type=int, help='minibatch size')
-parser.add_argument('--discount', default=0.9, type=float, help='')
+parser.add_argument('--gamma', default=0.99, type=float, help='')
 parser.add_argument('--env', default='Pendulum-v0', type=str, help='Environment to use')
 parser.add_argument('--max_steps', default=500, type=int, help='Maximum steps per episode')
 parser.add_argument('--n_eps', default=2000, type=int, help='Maximum number of episodes')
@@ -44,6 +44,7 @@ parser.add_argument('--v_min', default=-150.0, type=float, help='Minimum return'
 parser.add_argument('--v_max', default=150.0, type=float, help='Maximum return')
 parser.add_argument('--n_atoms', default=51, type=int, help='Number of bins')
 parser.add_argument('--multithread', default=0, type=int, help='To activate multithread')
+parser.add_argument('--n_steps', default=5, type=int, help='number of steps to rollout')
 parser.add_argument('--logfile', default='train_logs', type=str, help='File name for the train log data')
 
 args = parser.parse_args()
@@ -62,7 +63,7 @@ def configure_env_params():
     # pass
     if args.env == 'Pendulum-v0':
         args.v_min = -300.
-        args.v_max = 150.
+        args.v_max = 0.
     # elif args.env == 'InvertedPendulum-v1':
     #     args.v_min = -150.
     #     args.v_max = 150.
@@ -119,7 +120,7 @@ class Worker(object):
         self.name = name
         self.ddpg = DDPG(obs_dim=obs_dim, act_dim=act_dim, env=self.env, memory_size=args.rmsize,\
                           batch_size=args.bsize, tau=args.tau, critic_dist_info=critic_dist_info, \
-                          prioritized_replay=args.p_replay)
+                          prioritized_replay=args.p_replay, gamma = 0.99, n_steps = args.n_steps)
         self.ddpg.assign_global_optimizer(optimizer_global_actor, optimizer_global_critic)
         print('Intialized worker :',self.name)
 
@@ -135,7 +136,16 @@ class Worker(object):
         for n_steps in range(args.warmup):
             action = np.random.uniform(-1.0, 1.0, size=act_dim)
             next_state, reward, done, _ = self.env.step(action)
-            self.ddpg.replayBuffer.add(state, action, reward, next_state, done)
+            # self.ddpg.replayBuffer.add(state, action, reward, next_state, done)
+
+            if j >= args.n_steps - 1:
+                cum_reward = 0.
+                exp_gamma = 1
+                for k in range(-args.n_steps, 0):
+                    cum_reward += exp_gamma * episode_rewards[k]
+                    exp_gamma *= args.gamma
+                self.ddpg.replayBuffer.add(episode_states[-args.n_steps].reshape(-1), episode_actions[-1], cum_reward,
+                                           next_state, done)
 
             if done:
                 state = self.env.reset()
@@ -159,7 +169,7 @@ class Worker(object):
         self.train_logs['total_reward'] = []
         self.train_logs['time'] = []
         self.train_logs['x_val'] = []
-        self.train_logs['info_summary'] = "Distributional DDPG"
+        self.train_logs['info_summary'] = "Distributional DDPG_" + str(args.n_steps) + 'N'
         if args.p_replay:
             self.train_logs['info_summary'] = self.train_logs['info_summary'] + ' + PER'
         self.train_logs['x'] = 'steps'
@@ -167,6 +177,10 @@ class Worker(object):
         for i in range(args.n_eps):
             state = self.env.reset()
             total_reward = 0.
+            episode_states = []
+            episode_rewards = []
+            episode_actions = []
+
             for j in range(args.max_steps):
                 self.ddpg.actor.eval()
 
@@ -175,7 +189,22 @@ class Worker(object):
                 action = np.clip(to_numpy(self.ddpg.actor(to_tensor(state))).reshape(-1, ) + noise, -1.0, 1.0)
                 next_state, reward, done, _ = self.env.step(action)
                 total_reward += reward
-                self.ddpg.replayBuffer.add(state.reshape(-1), action, reward, next_state, done)
+
+                #### n-steps buffer
+                episode_states.append(state)
+                episode_actions.append(action)
+                episode_rewards.append(reward)
+
+
+                if j >= args.n_steps-1:
+                    cum_reward = 0.
+                    exp_gamma = 1
+                    for k in range(-args.n_steps, 0):
+                        cum_reward += exp_gamma * episode_rewards[k]
+                        exp_gamma *= args.gamma
+                    self.ddpg.replayBuffer.add(episode_states[-args.n_steps].reshape(-1), episode_actions[-1], cum_reward, next_state, done)
+
+                # self.ddpg.replayBuffer.add(state.reshape(-1), action, reward, next_state, done)
 
                 self.ddpg.actor.train()
                 self.ddpg.train(global_ddpg)
@@ -211,12 +240,12 @@ if __name__ == '__main__':
                         'v_max': args.v_max, \
                         'n_atoms': args.n_atoms}
     args.logfile_latest = args.logfile + '_' + args.env + '_latest_DistDDPG' + ('+PER' if args.p_replay else '') + '.pkl'
-    args.logfile = args.logfile + '_' + args.env + '_DistDDPG' + ('+PER_' if args.p_replay else '') + time.strftime("%Y%m%d-%H%M%S") + '.pkl'
+    args.logfile = args.logfile + '_' + args.env + '_DistDDPG_' + str(args.n_steps) + 'N' + ('PER_' if args.p_replay else '') + time.strftime("%Y%m%d-%H%M%S") + '.pkl'
 
     global_ddpg = DDPG(obs_dim=obs_dim, act_dim=act_dim, env=env, memory_size=args.rmsize,\
-                        batch_size=args.bsize, tau=args.tau, critic_dist_info=critic_dist_info)
+                        batch_size=args.bsize, tau=args.tau, critic_dist_info=critic_dist_info, gamma = args.gamma, n_steps = args.n_steps)
     optimizer_global_actor = SharedAdam(global_ddpg.actor.parameters(), lr=(1e-4)/float(args.n_workers))
-    optimizer_global_critic = SharedAdam(global_ddpg.critic.parameters(), lr=(1e-4)/float(args.n_workers), weight_decay=1e-02)
+    optimizer_global_critic = SharedAdam(global_ddpg.critic.parameters(), lr=(1e-3)/float(args.n_workers))#, weight_decay=1e-02)
     global_count = to_tensor(np.zeros(1), requires_grad=False).share_memory_()
 
     global_ddpg.share_memory()
