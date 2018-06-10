@@ -59,10 +59,10 @@ act_dim = env.action_space.n if discrete else env.action_space.shape[0]
 global_returns = [(0, 0)]  # list of tuple(step, return)
 
 def configure_env_params():
-    pass
-    # if args.env == 'Pendulum-v0':
-    #     args.v_min = -150.
-    #     args.v_max = 150.
+    # pass
+    if args.env == 'Pendulum-v0':
+        args.v_min = -300.
+        args.v_max = 150.
     # elif args.env == 'InvertedPendulum-v1':
     #     args.v_min = -150.
     #     args.v_max = 150.
@@ -158,11 +158,12 @@ class Worker(object):
         self.train_logs['avg_reward'] = []
         self.train_logs['total_reward'] = []
         self.train_logs['time'] = []
+        self.train_logs['x_val'] = []
         self.train_logs['info_summary'] = "Distributional DDPG"
         if args.p_replay:
             self.train_logs['info_summary'] = self.train_logs['info_summary'] + ' + PER'
-        self.train_logs['x'] = 'episode'
-
+        self.train_logs['x'] = 'steps'
+        step_counter = 0
         for i in range(args.n_eps):
             state = self.env.reset()
             total_reward = 0.
@@ -178,6 +179,7 @@ class Worker(object):
 
                 self.ddpg.actor.train()
                 self.ddpg.train(global_ddpg)
+                step_counter += 1
                 global_count += 1
 
                 n_steps += 1
@@ -195,6 +197,7 @@ class Worker(object):
                 self.train_logs['avg_reward'].append(avg_reward)
                 self.train_logs['total_reward'].append(total_reward)
                 self.train_logs['time'].append((datetime.datetime.utcnow()-self.start_time).total_seconds()/60)
+                self.train_logs['x_val'].append(step_counter)
                 with open(args.logfile, 'wb') as fHandle:
                     pickle.dump(self.train_logs, fHandle, protocol=pickle.HIGHEST_PROTOCOL)
                 with open(args.logfile_latest, 'wb') as fHandle:
