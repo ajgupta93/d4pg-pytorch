@@ -14,7 +14,7 @@ class DDPG:
     replayBuffer = None  # type: Replay
 
     def __init__(self, obs_dim, act_dim, env = None, memory_size=50000, batch_size=64,\
-                 lr_critic=1e-3, lr_actor=1e-4, gamma=0.99, tau=0.001, prioritized_replay=True,\
+                 lr_critic=1e-4, lr_actor=1e-4, gamma=0.99, tau=0.001, prioritized_replay=True,\
                  critic_dist_info=None):
         
         self.gamma          = gamma

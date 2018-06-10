@@ -38,10 +38,10 @@ parser.add_argument('--env', default='Pendulum-v0', type=str, help='Environment 
 parser.add_argument('--max_steps', default=500, type=int, help='Maximum steps per episode')
 parser.add_argument('--n_eps', default=2000, type=int, help='Maximum number of episodes')
 parser.add_argument('--debug', default=True, type=bool, help='Print debug statements')
-parser.add_argument('--warmup', default=10000, type=int, help='time without training but only filling the replay memory')
-parser.add_argument('--p_replay', default=False, type=bool, help='Enable prioritized replay - based on TD error')
-parser.add_argument('--v_min', default=-100.0, type=float, help='Minimum return')
-parser.add_argument('--v_max', default=500.0, type=float, help='Maximum return')
+parser.add_argument('--warmup', default=1000, type=int, help='time without training but only filling the replay memory')
+parser.add_argument('--p_replay', default=0, type=int, help='Enable prioritized replay - based on TD error')
+parser.add_argument('--v_min', default=-150.0, type=float, help='Minimum return')
+parser.add_argument('--v_max', default=150.0, type=float, help='Maximum return')
 parser.add_argument('--n_atoms', default=51, type=int, help='Number of bins')
 parser.add_argument('--multithread', default=0, type=int, help='To activate multithread')
 parser.add_argument('--logfile', default='train_logs', type=str, help='File name for the train log data')
@@ -59,17 +59,21 @@ act_dim = env.action_space.n if discrete else env.action_space.shape[0]
 global_returns = [(0, 0)]  # list of tuple(step, return)
 
 def configure_env_params():
-    if args.env == 'Pendulum-v0':
-        args.v_min = -1000.0
-        args.v_max = 100
-    elif args.env == 'InvertedPendulum-v2':
-        args.v_min = -100
-        args.v_max = 500
-    elif args.env == 'HalfCheetah-v2':
-        args.v_min = -1000
-        args.v_max = 1000
-    else:
-        print("Undefined environment. Configure v_max and v_min for environment")
+    pass
+    # if args.env == 'Pendulum-v0':
+    #     args.v_min = -150.
+    #     args.v_max = 150.
+    # elif args.env == 'InvertedPendulum-v1':
+    #     args.v_min = -150.
+    #     args.v_max = 150.
+    # elif args.env == 'HalfCheetah-v1':
+    #     args.v_min = -150.
+    #     args.v_max = 150.
+    # elif args.env == 'Ant-v1':
+    #     args.v_min = -150.
+    #     args.v_max = 150.
+    # else:
+    #     print("Undefined environment. Configure v_max and v_min for environment")
 
 
 def global_model_eval(global_model, global_count):
@@ -142,7 +146,8 @@ class Worker(object):
     def work(self, global_ddpg, global_count):
         avg_reward = 0.
         n_steps = 0
-        # self.warmup()
+        if args.p_replay:
+            self.warmup()
 
         self.ddpg.sync_local_global(global_ddpg)
         self.ddpg.hard_update()
@@ -154,6 +159,8 @@ class Worker(object):
         self.train_logs['total_reward'] = []
         self.train_logs['time'] = []
         self.train_logs['info_summary'] = "Distributional DDPG"
+        if args.p_replay:
+            self.train_logs['info_summary'] = self.train_logs['info_summary'] + ' + PER'
         self.train_logs['x'] = 'episode'
 
         for i in range(args.n_eps):
@@ -200,13 +207,13 @@ if __name__ == '__main__':
                         'v_min': args.v_min, \
                         'v_max': args.v_max, \
                         'n_atoms': args.n_atoms}
-    args.logfile_latest = args.logfile + '_' + args.env + '_latest_DistDDPG' + '.pkl'
-    args.logfile = args.logfile + '_' + args.env + '_DistDDPG_' + time.strftime("%Y%m%d-%H%M%S") + '.pkl'
+    args.logfile_latest = args.logfile + '_' + args.env + '_latest_DistDDPG' + ('+PER' if args.p_replay else '') + '.pkl'
+    args.logfile = args.logfile + '_' + args.env + '_DistDDPG' + ('+PER_' if args.p_replay else '') + time.strftime("%Y%m%d-%H%M%S") + '.pkl'
 
     global_ddpg = DDPG(obs_dim=obs_dim, act_dim=act_dim, env=env, memory_size=args.rmsize,\
                         batch_size=args.bsize, tau=args.tau, critic_dist_info=critic_dist_info)
     optimizer_global_actor = SharedAdam(global_ddpg.actor.parameters(), lr=(1e-4)/float(args.n_workers))
-    optimizer_global_critic = SharedAdam(global_ddpg.critic.parameters(), lr=(1e-3)/float(args.n_workers))
+    optimizer_global_critic = SharedAdam(global_ddpg.critic.parameters(), lr=(1e-4)/float(args.n_workers), weight_decay=1e-02)
     global_count = to_tensor(np.zeros(1), requires_grad=False).share_memory_()
 
     global_ddpg.share_memory()
