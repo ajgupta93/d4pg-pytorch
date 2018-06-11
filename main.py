@@ -138,14 +138,14 @@ class Worker(object):
             next_state, reward, done, _ = self.env.step(action)
             # self.ddpg.replayBuffer.add(state, action, reward, next_state, done)
 
-            if j >= args.n_steps - 1:
-                cum_reward = 0.
-                exp_gamma = 1
-                for k in range(-args.n_steps, 0):
-                    cum_reward += exp_gamma * episode_rewards[k]
-                    exp_gamma *= args.gamma
-                self.ddpg.replayBuffer.add(episode_states[-args.n_steps].reshape(-1), episode_actions[-1], cum_reward,
-                                           next_state, done)
+            # if j >= args.n_steps - 1:
+            #     cum_reward = 0.
+            #     exp_gamma = 1
+            #     for k in range(-args.n_steps, 0):
+            #         cum_reward += exp_gamma * episode_rewards[k]
+            #         exp_gamma *= args.gamma
+            #     self.ddpg.replayBuffer.add(episode_states[-args.n_steps].reshape(-1), episode_actions[-1], cum_reward,
+            #                                next_state, done)
 
             if done:
                 state = self.env.reset()
@@ -239,13 +239,13 @@ if __name__ == '__main__':
                         'v_min': args.v_min, \
                         'v_max': args.v_max, \
                         'n_atoms': args.n_atoms}
-    args.logfile_latest = args.logfile + '_' + args.env + '_latest_DistDDPG' + ('+PER' if args.p_replay else '') + '.pkl'
-    args.logfile = args.logfile + '_' + args.env + '_DistDDPG_' + str(args.n_steps) + 'N' + ('PER_' if args.p_replay else '') + time.strftime("%Y%m%d-%H%M%S") + '.pkl'
+    args.logfile_latest = args.logfile + '_' + args.env + '_latest_DistDDPG_' + str(args.n_steps) + 'N' ('+PER' if args.p_replay else '') + '.pkl'
+    args.logfile = args.logfile + '_' + args.env + '_DistDDPG_' + str(args.n_steps) + 'N' + ('+PER_' if args.p_replay else '') + time.strftime("%Y%m%d-%H%M%S") + '.pkl'
 
     global_ddpg = DDPG(obs_dim=obs_dim, act_dim=act_dim, env=env, memory_size=args.rmsize,\
                         batch_size=args.bsize, tau=args.tau, critic_dist_info=critic_dist_info, gamma = args.gamma, n_steps = args.n_steps)
     optimizer_global_actor = SharedAdam(global_ddpg.actor.parameters(), lr=(1e-4)/float(args.n_workers))
-    optimizer_global_critic = SharedAdam(global_ddpg.critic.parameters(), lr=(1e-3)/float(args.n_workers))#, weight_decay=1e-02)
+    optimizer_global_critic = SharedAdam(global_ddpg.critic.parameters(), lr=(1e-4)/float(args.n_workers))#, weight_decay=1e-02)
     global_count = to_tensor(np.zeros(1), requires_grad=False).share_memory_()
 
     global_ddpg.share_memory()
