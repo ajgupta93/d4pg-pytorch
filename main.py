@@ -154,7 +154,8 @@ class Worker(object):
 
 
     def work(self, global_ddpg, global_count):
-        avg_reward = 0.
+        avg_reward_train = 0.
+        avg_reward_test = 0.
         n_steps = 0
         if args.p_replay:
             self.warmup()
@@ -165,8 +166,10 @@ class Worker(object):
 
         # Logging variables
         self.train_logs = {}
-        self.train_logs['avg_reward'] = []
-        self.train_logs['total_reward'] = []
+        self.train_logs['avg_reward_train'] = []
+        self.train_logs['avg_reward_test'] = []
+        self.train_logs['total_reward_train'] = []
+        self.train_logs['total_reward_test'] = []
         self.train_logs['time'] = []
         self.train_logs['x_val'] = []
         self.train_logs['info_summary'] = "Distributional DDPG_" + str(args.n_steps) + 'N'
@@ -176,7 +179,7 @@ class Worker(object):
         step_counter = 0
         for i in range(args.n_eps):
             state = self.env.reset()
-            total_reward = 0.
+            total_reward_train = 0.
             episode_states = []
             episode_rewards = []
             episode_actions = []
@@ -188,7 +191,7 @@ class Worker(object):
                 noise = self.ddpg.noise.sample()
                 action = np.clip(to_numpy(self.ddpg.actor(to_tensor(state))).reshape(-1, ) + noise, -1.0, 1.0)
                 next_state, reward, done, _ = self.env.step(action)
-                total_reward += reward
+                total_reward_train += reward
 
                 #### n-steps buffer
                 episode_states.append(state)
@@ -219,12 +222,38 @@ class Worker(object):
                 state = next_state
                 # print("Episode ", i, "\t Step count: ", n_steps)
 
-            avg_reward = 0.95*avg_reward + 0.05*total_reward
+            avg_reward_train = 0.95*avg_reward_train + 0.05*total_reward_train
+
+            state = self.env.reset()
+            total_reward_test = 0.
+
+            for j in range(args.max_steps):
+                self.ddpg.actor.eval()
+
+                state = state.reshape(1, -1)
+                action = to_numpy(self.ddpg.actor(to_tensor(state))).reshape(-1)
+                #if j==0:
+                #    action += self.ddpg.noise.sample()
+                action = np.clip(action, -1.0, 1.0)
+                #print(action)
+                next_state, reward, done, _ = self.env.step(action)
+                total_reward_test += reward
+                if done:
+                    break
+                else:
+                    state = next_state
+
+            avg_reward_test = 0.95*avg_reward_test + 0.05*total_reward_test
+
 
             if i%1==0:
-                print('Episode ',i,'\tWorker :',self.name,'\tAvg Reward :',avg_reward,'\tTotal reward :',total_reward,'\tSteps :',n_steps)
-                self.train_logs['avg_reward'].append(avg_reward)
-                self.train_logs['total_reward'].append(total_reward)
+                print('Episode ',i,'\tWorker :',self.name,\
+                      '\tAvg Reward Train:',avg_reward_train,'\tTotal reward train :',total_reward_train,\
+                      '\tAvg Reward Test:',avg_reward_test,'\tTotal reward test :',total_reward_test, '\tSteps :',n_steps)
+                self.train_logs['avg_reward_train'].append(avg_reward_train)
+                self.train_logs['avg_reward_test'].append(avg_reward_test)
+                self.train_logs['total_reward_train'].append(total_reward_train)
+                self.train_logs['total_reward_test'].append(total_reward_test)
                 self.train_logs['time'].append((datetime.datetime.utcnow()-self.start_time).total_seconds()/60)
                 self.train_logs['x_val'].append(step_counter)
                 with open(args.logfile, 'wb') as fHandle:
@@ -246,8 +275,8 @@ if __name__ == '__main__':
 
     global_ddpg = DDPG(obs_dim=obs_dim, act_dim=act_dim, env=env, memory_size=args.rmsize,\
                         batch_size=args.bsize, tau=args.tau, critic_dist_info=critic_dist_info, gamma = args.gamma, n_steps = args.n_steps)
-    optimizer_global_actor = SharedAdam(global_ddpg.actor.parameters(), lr=(5e-5)/float(args.n_workers))
-    optimizer_global_critic = SharedAdam(global_ddpg.critic.parameters(), lr=(5e-5)/float(args.n_workers))#, weight_decay=1e-02)
+    optimizer_global_actor = SharedAdam(global_ddpg.actor.parameters(), lr=(1e-4)/float(args.n_workers))
+    optimizer_global_critic = SharedAdam(global_ddpg.critic.parameters(), lr=(1e-4)/float(args.n_workers))#, weight_decay=1e-02)
     global_count = to_tensor(np.zeros(1), requires_grad=False).share_memory_()
 
     global_ddpg.share_memory()

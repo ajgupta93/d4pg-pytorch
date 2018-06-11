@@ -9,7 +9,7 @@ class Replay(object):
         self.env = env
         self.n_steps = n_steps
         self.gamma = gamma
-        self.initialize(init_length=1000)
+        self.initialize(init_length=10000)
 
     def add(self, state, action, reward, next_state, done):
         if len(self.buffer) < self.capacity:

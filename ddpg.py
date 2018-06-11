@@ -1,8 +1,10 @@
 import numpy as np
+import pdb
 import math
 from models import actor, critic
 import torch
 import torch.optim as optim
+import torch.nn.functional as F
 import torch.nn as nn
 from random_process import OrnsteinUhlenbeckProcess, GaussianNoise
 from utils import *
@@ -137,6 +139,46 @@ class DDPG:
 
         return m_prob
 
+    def reproject2(self, target_z_dist, rewards, terminates):
+        #next_distr = next_distr_v.data.cpu().numpy()
+        rewards = rewards.reshape(-1)
+        terminates = terminates.reshape(-1).astype(np.int64)
+        #dones_mask = dones_mask_t.cpu().numpy().astype(np.bool)
+        #batch_size = len(rewards)
+        proj_distr = np.zeros((self.batch_size, self.n_atoms), dtype=np.float32)
+
+        #pdb.set_trace()
+
+        for atom in range(self.n_atoms):
+            tz_j = np.minimum(self.v_max, np.maximum(self.v_min, rewards + (self.v_min + atom * self.delta) * self.gamma))
+            b_j = (tz_j - self.v_min) / self.delta
+            l = np.floor(b_j).astype(np.int64)
+            u = np.ceil(b_j).astype(np.int64)
+            eq_mask = u == l
+            proj_distr[eq_mask, l[eq_mask]] += target_z_dist[eq_mask, atom]
+            ne_mask = u != l
+            proj_distr[ne_mask, l[ne_mask]] += target_z_dist[ne_mask, atom] * (u - b_j)[ne_mask]
+            proj_distr[ne_mask, u[ne_mask]] += target_z_dist[ne_mask, atom] * (b_j - l)[ne_mask]
+
+        if terminates.any():
+            proj_distr[terminates] = 0.0
+            tz_j = np.minimum(self.v_max, np.maximum(self.v_min, rewards[terminates]))
+            b_j = (tz_j - self.v_min) / self.delta
+            l = np.floor(b_j).astype(np.int64)
+            u = np.ceil(b_j).astype(np.int64)
+            eq_mask = u == l
+            eq_dones = terminates.copy()
+            eq_dones[terminates] = eq_mask
+            if eq_dones.any():
+                proj_distr[eq_dones, l] = 1.0
+            ne_mask = u != l
+            ne_dones = terminates.copy()
+            ne_dones[terminates] = ne_mask
+            if ne_dones.any():
+                proj_distr[ne_dones, l] = (u - b_j)[ne_mask]
+                proj_distr[ne_dones, u] = (b_j - l)[ne_mask]
+        return proj_distr
+
     def sample(self, batch_size=None):
         weights = None
         batch_idxes = None
@@ -157,13 +199,17 @@ class DDPG:
         # update critic (create target for Q function)
         target_z_dist = self.critic_target(to_tensor(next_states, volatile=True),\
                                             self.actor_target(to_tensor(next_states, volatile=True)))
+
         q_dist = self.critic(to_tensor(states), to_tensor(actions))  # n_sample, n_atoms
 
         qdist_loss = None #dummy variable to remove redundant warnings
         if self.dist_type == 'categorical':
-            reprojected_dist = self.reproj_categorical_dist(target_z_dist.cpu().data.numpy(), rewards, terminates)
+            #reprojected_dist = self.reproj_categorical_dist(target_z_dist.cpu().data.numpy(), rewards, terminates)
+            reprojected_dist = self.reproject2(target_z_dist.cpu().data.numpy(), rewards, terminates)
             #qdist_loss = self.critic_loss(q_dist, to_tensor(reprojected_dist, requires_grad=False))
-            qdist_loss = -(to_tensor(reprojected_dist, requires_grad=False)*torch.log(q_dist+1e-05)).sum(dim=1).mean()
+            qdist_loss = -(to_tensor(reprojected_dist, requires_grad=False)*torch.log(q_dist+1e-010)).sum(dim=1).mean()
+            #qdist_loss = -torch.from_numpy(reprojected_dist)*F.log_softmax(q_dist, dim=1)
+            #qdist_loss = qdist_loss.sum(dim=1).mean()
             if self.prioritized_replay:
                 td_errors = -(to_tensor(reprojected_dist, requires_grad=False) * q_dist)
                 td_errors = td_errors.sum(dim=1)
