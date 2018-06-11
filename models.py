@@ -50,9 +50,9 @@ class critic(nn.Module):
         super(critic, self).__init__()
         self.dist_info = dist_info
 
-        self.fc1 = nn.Linear(state_size, 300)
+        self.fc1 = nn.Linear(state_size, 400)
         #self.bn1 = nn.BatchNorm1d(300)
-        self.fc2 = nn.Linear(300 + action_size, 300)
+        self.fc2 = nn.Linear(400 + action_size, 300)
 
         if self.dist_info['type'] == 'categorical':
             self.fc3 = nn.Linear(300, self.dist_info['n_atoms'])

@@ -2,6 +2,7 @@ from __future__ import division
 import gym
 import os
 import time
+import pybullet_envs
 import argparse
 from ddpg import DDPG
 from utils import *
