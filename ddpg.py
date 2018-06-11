@@ -159,24 +159,24 @@ class DDPG:
             ne_mask = u != l
             proj_distr[ne_mask, l[ne_mask]] += target_z_dist[ne_mask, atom] * (u - b_j)[ne_mask]
             proj_distr[ne_mask, u[ne_mask]] += target_z_dist[ne_mask, atom] * (b_j - l)[ne_mask]
-        #
-        # if terminates.any():
-        #     proj_distr[terminates] = 0.0
-        #     tz_j = np.minimum(self.v_max, np.maximum(self.v_min, rewards[terminates]))
-        #     b_j = (tz_j - self.v_min) / self.delta
-        #     l = np.floor(b_j).astype(np.int64)
-        #     u = np.ceil(b_j).astype(np.int64)
-        #     eq_mask = u == l
-        #     eq_dones = terminates.copy()
-        #     eq_dones[terminates] = eq_mask
-        #     if eq_dones.any():
-        #         proj_distr[eq_dones, l] = 1.0
-        #     ne_mask = u != l
-        #     ne_dones = terminates.copy()
-        #     ne_dones[terminates] = ne_mask
-        #     if ne_dones.any():
-        #         proj_distr[ne_dones, l] = (u - b_j)[ne_mask]
-        #         proj_distr[ne_dones, u] = (b_j - l)[ne_mask]
+
+        if terminates.any():
+            proj_distr[terminates] = 0.0
+            tz_j = np.minimum(self.v_max, np.maximum(self.v_min, rewards[terminates]))
+            b_j = (tz_j - self.v_min) / self.delta
+            l = np.floor(b_j).astype(np.int64)
+            u = np.ceil(b_j).astype(np.int64)
+            eq_mask = u == l
+            eq_dones = terminates.copy()
+            eq_dones[terminates] = eq_mask
+            if eq_dones.any():
+                proj_distr[eq_dones, l] = 1.0
+            ne_mask = u != l
+            ne_dones = terminates.copy()
+            ne_dones[terminates] = ne_mask
+            if ne_dones.any():
+                proj_distr[ne_dones, l] = (u - b_j)[ne_mask]
+                proj_distr[ne_dones, u] = (b_j - l)[ne_mask]
         return proj_distr
 
     def sample(self, batch_size=None):

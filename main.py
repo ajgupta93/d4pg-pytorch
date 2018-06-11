@@ -10,7 +10,7 @@ from shared_adam import SharedAdam
 import numpy as np
 from normalize_env import NormalizeAction
 import torch.multiprocessing as mp
-
+from pdb import set_trace as bp
 import datetime
 import time
 import pickle
@@ -42,7 +42,7 @@ parser.add_argument('--env', default='Pendulum-v0', type=str, help='Environment 
 parser.add_argument('--max_steps', default=500, type=int, help='Maximum steps per episode')
 parser.add_argument('--n_eps', default=2000, type=int, help='Maximum number of episodes')
 parser.add_argument('--debug', default=True, type=bool, help='Print debug statements')
-parser.add_argument('--warmup', default=1000, type=int, help='time without training but only filling the replay memory')
+parser.add_argument('--warmup', default=10000, type=int, help='time without training but only filling the replay memory')
 parser.add_argument('--p_replay', default=0, type=int, help='Enable prioritized replay - based on TD error')
 parser.add_argument('--v_min', default=-150.0, type=float, help='Minimum return')
 parser.add_argument('--v_max', default=150.0, type=float, help='Maximum return')
@@ -135,35 +135,48 @@ class Worker(object):
                           batch_size=args.bsize, tau=args.tau, critic_dist_info=critic_dist_info, \
                           prioritized_replay=args.p_replay, gamma = args.gamma, n_steps = args.n_steps)
         self.ddpg.assign_global_optimizer(optimizer_global_actor, optimizer_global_critic)
+        self.warmup()
         print('Intialized worker :',self.name)
 
     # warmup function to fill replay buffer initially
     def warmup(self):
-        n_steps = 0
+
         self.ddpg.actor.eval()
-        # for i in range(args.n_eps):
-        #     state = self.env.reset()
-        #     for j in range(args.max_steps):
-        #
+
+        counter = 0
         state = self.env.reset()
-        for n_steps in range(args.warmup):
-            action = np.random.uniform(-1.0, 1.0, size=act_dim)
-            next_state, reward, done, _ = self.env.step(action)
-            # self.ddpg.replayBuffer.add(state, action, reward, next_state, done)
+        episode_states = []
+        episode_rewards = []
+        episode_actions = []
+        while counter < args.warmup:
 
-            # if j >= args.n_steps - 1:
-            #     cum_reward = 0.
-            #     exp_gamma = 1
-            #     for k in range(-args.n_steps, 0):
-            #         cum_reward += exp_gamma * episode_rewards[k]
-            #         exp_gamma *= args.gamma
-            #     self.ddpg.replayBuffer.add(episode_states[-args.n_steps].reshape(-1), episode_actions[-1], cum_reward,
-            #                                next_state, done)
+            action = to_numpy(self.ddpg.actor(to_tensor(state.reshape(-1))))  #np.random.uniform(-1.0, 1.0, size=act_dim)
+            next_state, reward, done, _ = self.env.step( np.clip(action + self.ddpg.noise.sample(), -1, 1) )
 
+            #### n-steps buffer
+            episode_states.append(state)
+            episode_actions.append(action)
+            episode_rewards.append(reward)
+
+            if len(episode_states) >= args.n_steps:
+                cum_reward = 0.
+                exp_gamma = 1
+                for k in range(-args.n_steps, 0):
+                    try:
+                        cum_reward += exp_gamma * episode_rewards[k]
+                    except:
+                        bp()
+                    exp_gamma *= args.gamma
+                self.ddpg.replayBuffer.add(episode_states[-args.n_steps].reshape(-1), episode_actions[-1], cum_reward,
+                                           next_state, done)
             if done:
+                episode_states = []
+                episode_rewards = []
+                episode_actions = []
                 state = self.env.reset()
             else:
                 state = next_state
+            counter += 1
 
 
     def work(self, global_ddpg, global_count):
