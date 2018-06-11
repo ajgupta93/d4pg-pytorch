@@ -239,7 +239,7 @@ if __name__ == '__main__':
                         'v_min': args.v_min, \
                         'v_max': args.v_max, \
                         'n_atoms': args.n_atoms}
-    args.logfile_latest = args.logfile + '_' + args.env + '_latest_DistDDPG_' + str(args.n_steps) + 'N' ('+PER' if args.p_replay else '') + '.pkl'
+    args.logfile_latest = args.logfile + '_' + args.env + '_latest_DistDDPG_' + str(args.n_steps) + 'N' + ('+PER' if args.p_replay else '') + '.pkl'
     args.logfile = args.logfile + '_' + args.env + '_DistDDPG_' + str(args.n_steps) + 'N' + ('+PER_' if args.p_replay else '') + time.strftime("%Y%m%d-%H%M%S") + '.pkl'
 
     global_ddpg = DDPG(obs_dim=obs_dim, act_dim=act_dim, env=env, memory_size=args.rmsize,\
