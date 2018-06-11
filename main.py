@@ -120,7 +120,7 @@ class Worker(object):
         self.name = name
         self.ddpg = DDPG(obs_dim=obs_dim, act_dim=act_dim, env=self.env, memory_size=args.rmsize,\
                           batch_size=args.bsize, tau=args.tau, critic_dist_info=critic_dist_info, \
-                          prioritized_replay=args.p_replay, gamma = 0.99, n_steps = args.n_steps)
+                          prioritized_replay=args.p_replay, gamma = args.gamma, n_steps = args.n_steps)
         self.ddpg.assign_global_optimizer(optimizer_global_actor, optimizer_global_critic)
         print('Intialized worker :',self.name)
 
@@ -202,7 +202,7 @@ class Worker(object):
                     for k in range(-args.n_steps, 0):
                         cum_reward += exp_gamma * episode_rewards[k]
                         exp_gamma *= args.gamma
-                    self.ddpg.replayBuffer.add(episode_states[-args.n_steps].reshape(-1), episode_actions[-1], cum_reward, next_state, done)
+                    self.ddpg.replayBuffer.add(episode_states[-args.n_steps].reshape(-1), episode_actions[-args.n_steps], cum_reward, next_state, done)
 
                 # self.ddpg.replayBuffer.add(state.reshape(-1), action, reward, next_state, done)
 
@@ -232,6 +232,8 @@ class Worker(object):
                 with open(args.logfile_latest, 'wb') as fHandle:
                     pickle.dump(self.train_logs, fHandle, protocol=pickle.HIGHEST_PROTOCOL)
 
+            self.ddpg.noise.reset()
+
 
 if __name__ == '__main__':
     configure_env_params()
@@ -244,8 +246,8 @@ if __name__ == '__main__':
 
     global_ddpg = DDPG(obs_dim=obs_dim, act_dim=act_dim, env=env, memory_size=args.rmsize,\
                         batch_size=args.bsize, tau=args.tau, critic_dist_info=critic_dist_info, gamma = args.gamma, n_steps = args.n_steps)
-    optimizer_global_actor = SharedAdam(global_ddpg.actor.parameters(), lr=(1e-4)/float(args.n_workers))
-    optimizer_global_critic = SharedAdam(global_ddpg.critic.parameters(), lr=(1e-4)/float(args.n_workers))#, weight_decay=1e-02)
+    optimizer_global_actor = SharedAdam(global_ddpg.actor.parameters(), lr=(5e-5)/float(args.n_workers))
+    optimizer_global_critic = SharedAdam(global_ddpg.critic.parameters(), lr=(5e-5)/float(args.n_workers))#, weight_decay=1e-02)
     global_count = to_tensor(np.zeros(1), requires_grad=False).share_memory_()
 
     global_ddpg.share_memory()

@@ -2,7 +2,7 @@ import numpy as np
 #import matplotlib.pyplot as plt
 
 class GaussianNoise(object):
-    def __init__(self, dimension, num_epochs, mu=0.0, var=0.1):
+    def __init__(self, dimension, num_epochs, mu=0.0, var=0.3):
         self.mu = mu
         self.var = var
         self.dimension = dimension
@@ -14,7 +14,7 @@ class GaussianNoise(object):
         self.iter = 0
 
     def sample(self):
-        x = np.random.normal(self.mu, np.sqrt(self.epsilon*self.var), size=self.dimension)
+        x = np.random.normal(self.mu, self.epsilon*self.var, size=self.dimension)
         return x
 
     def reset(self):

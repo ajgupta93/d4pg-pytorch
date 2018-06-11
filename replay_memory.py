@@ -41,7 +41,7 @@ class Replay(object):
                 for k in range(-self.n_steps, 0):
                     cum_reward += exp_gamma * episode_rewards[k]
                     exp_gamma *= self.gamma
-                self.add(episode_states[-self.n_steps].reshape(-1), episode_actions[-1], cum_reward,
+                self.add(episode_states[-self.n_steps].reshape(-1), episode_actions[-self.n_steps], cum_reward,
                                            next_state, done)
                 # self.add(state, action, reward, next_state, done)
 
