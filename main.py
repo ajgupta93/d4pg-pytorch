@@ -1,5 +1,6 @@
 from __future__ import division
 import gym
+import os
 import time
 import argparse
 from ddpg import DDPG
@@ -12,6 +13,8 @@ import torch.multiprocessing as mp
 import datetime
 import time
 import pickle
+from tensorboard import SummaryWriter
+
 
 
 # converted_d1 = datetime.datetime.fromtimestamp(round(d1 / 1000))
@@ -45,9 +48,18 @@ parser.add_argument('--v_max', default=150.0, type=float, help='Maximum return')
 parser.add_argument('--n_atoms', default=51, type=int, help='Number of bins')
 parser.add_argument('--multithread', default=0, type=int, help='To activate multithread')
 parser.add_argument('--n_steps', default=5, type=int, help='number of steps to rollout')
-parser.add_argument('--logfile', default='train_logs', type=str, help='File name for the train log data')
+parser.add_argument('--logfile', default='logs', type=str, help='File name for the train log data')
+parser.add_argument('--log_dir', default='train_logs', type=str, help='File name for the train log data')
 
 args = parser.parse_args()
+
+
+writer = SummaryWriter('runs/exp' +
+                        ( '_' + args.env + '_') +
+                        ('_PER' if args.p_replay else '' ) +        # PER
+                        ( '_' + str(args.n_steps) + 'N' )  +        # N-steps
+                        ( '_' + str(args.n_workers) + 'Workers' )# N-workers
+                       )
 
 env = NormalizeAction(gym.make(args.env).env)
 env._max_episode_steps = args.max_steps
@@ -250,6 +262,9 @@ class Worker(object):
                 print('Episode ',i,'\tWorker :',self.name,\
                       '\tAvg Reward Train:',avg_reward_train,'\tTotal reward train :',total_reward_train,\
                       '\tAvg Reward Test:',avg_reward_test,'\tTotal reward test :',total_reward_test, '\tSteps :',n_steps)
+                writer.add_scalar('train_reward', total_reward_train, n_steps)
+                writer.add_scalar('test_reward', total_reward_test, n_steps)
+
                 self.train_logs['avg_reward_train'].append(avg_reward_train)
                 self.train_logs['avg_reward_test'].append(avg_reward_test)
                 self.train_logs['total_reward_train'].append(total_reward_train)
@@ -270,8 +285,10 @@ if __name__ == '__main__':
                         'v_min': args.v_min, \
                         'v_max': args.v_max, \
                         'n_atoms': args.n_atoms}
-    args.logfile_latest = args.logfile + '_' + args.env + '_latest_DistDDPG_' + str(args.n_steps) + 'N' + ('+PER' if args.p_replay else '') + '.pkl'
-    args.logfile = args.logfile + '_' + args.env + '_DistDDPG_' + str(args.n_steps) + 'N' + ('+PER_' if args.p_replay else '') + time.strftime("%Y%m%d-%H%M%S") + '.pkl'
+    if not os.path.exists(args.log_dir):
+        os.makedirs(args.log_dir)
+    args.logfile_latest = args.log_dir + '/' + args.logfile + '_' + args.env + '_latest_DistDDPG_' + str(args.n_steps) + 'N' + ('+PER' if args.p_replay else '') + '.pkl'
+    args.logfile = args.log_dir + '/' + args.logfile + '_' + args.env + '_DistDDPG_' + str(args.n_steps) + 'N' + ('+PER_' if args.p_replay else '') + time.strftime("%Y%m%d-%H%M%S") + '.pkl'
 
     global_ddpg = DDPG(obs_dim=obs_dim, act_dim=act_dim, env=env, memory_size=args.rmsize,\
                         batch_size=args.bsize, tau=args.tau, critic_dist_info=critic_dist_info, gamma = args.gamma, n_steps = args.n_steps)
