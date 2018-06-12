@@ -59,7 +59,7 @@ writer = SummaryWriter('runs/exp' +
                         ( '_' + args.env + '_') +
                         ('_PER' if args.p_replay else '' ) +        # PER
                         ( '_' + str(args.n_steps) + 'N' )  +        # N-steps
-                        ( '_' + str(args.n_workers) + 'Workers' )# N-workers
+                        ( '_' + str( args.n_workers if args.multithread else 1 ) + 'Workers' )# N-workers
                        )
 
 env = NormalizeAction(gym.make(args.env).env)
@@ -135,7 +135,6 @@ class Worker(object):
                           batch_size=args.bsize, tau=args.tau, critic_dist_info=critic_dist_info, \
                           prioritized_replay=args.p_replay, gamma = args.gamma, n_steps = args.n_steps)
         self.ddpg.assign_global_optimizer(optimizer_global_actor, optimizer_global_critic)
-        self.warmup()
         print('Intialized worker :',self.name)
 
     # warmup function to fill replay buffer initially
@@ -183,12 +182,12 @@ class Worker(object):
         avg_reward_train = 0.
         avg_reward_test = 0.
         n_steps = 0
-        if args.p_replay:
-            self.warmup()
 
         self.ddpg.sync_local_global(global_ddpg)
         self.ddpg.hard_update()
         self.start_time = datetime.datetime.utcnow()
+
+        self.warmup()
 
         # Logging variables
         self.train_logs = {}
@@ -258,10 +257,7 @@ class Worker(object):
 
                 state = state.reshape(1, -1)
                 action = to_numpy(self.ddpg.actor(to_tensor(state))).reshape(-1)
-                #if j==0:
-                #    action += self.ddpg.noise.sample()
                 action = np.clip(action, -1.0, 1.0)
-                #print(action)
                 next_state, reward, done, _ = self.env.step(action)
                 total_reward_test += reward
                 if done:
