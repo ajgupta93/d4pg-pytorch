@@ -363,6 +363,8 @@ class Worker(object):
                 #     pickle.dump(self.train_logs, fHandle, protocol=pickle.HIGHEST_PROTOCOL)
 
             # self.ddpg.noise.reset()
+            torch.save(self.ddpg.actor.state_dict(), env_name+'actor.pth')
+            torch.save(self.ddpg.critic.state_dict(), env_name+'critic.pth')
 
 
 if __name__ == '__main__':
