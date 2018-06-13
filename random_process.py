@@ -2,19 +2,19 @@ import numpy as np
 #import matplotlib.pyplot as plt
 
 class GaussianNoise(object):
-    def __init__(self, dimension, num_epochs, mu=0.0, var=0.3):
+    def __init__(self, dimension, num_epochs, mu=0.0, var=1):
         self.mu = mu
         self.var = var
         self.dimension = dimension
         self.epochs = 0
         self.num_epochs = num_epochs
         self.min_epsilon = 0.01 # minimum exploration probability
-        self.epsilon = 1.0
+        self.epsilon = 0.3
         self.decay_rate = 5.0/num_epochs # exponential decay rate for exploration prob
         self.iter = 0
 
     def sample(self):
-        x = np.random.normal(self.mu, self.epsilon*self.var, size=self.dimension)
+        x = self.epsilon * np.random.normal(self.mu, self.var, size=self.dimension)
         return x
 
     def reset(self):

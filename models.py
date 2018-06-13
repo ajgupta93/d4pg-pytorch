@@ -15,16 +15,18 @@ def fanin_init(size, fanin=None):
 class actor(nn.Module):
     def __init__(self, input_size, output_size):
         super(actor, self).__init__()
-        self.fc1 = nn.Linear(input_size, 400)
+        self.fc1 = nn.Linear(input_size, 64)
         #self.bn1 = nn.BatchNorm1d(400)
-        self.fc2 = nn.Linear(400, 400)
+        self.fc2 = nn.Linear(64, 64)
+        self.fc2_2 = nn.Linear(64, 64)
         #self.bn2 = nn.BatchNorm1d(400)
-        self.fc3 = nn.Linear(400, output_size)
+        self.fc3 = nn.Linear(64, output_size)
         self.init_weights()
     
     def init_weights(self, init_w=10e-3):
         self.fc1.weight.data = fanin_init(self.fc1.weight.data.size())
         self.fc2.weight.data = fanin_init(self.fc2.weight.data.size())
+        self.fc2_2.weight.data = fanin_init(self.fc2_2.weight.data.size())
         self.fc3.weight.data.normal_(0, 3e-3)
 
     def forward(self, state):
@@ -32,6 +34,7 @@ class actor(nn.Module):
         #out = self.bn1(out)
         out = F.relu(out)
         out = self.fc2(out)
+        out = self.fc2_2(out)
         #out = self.bn2(out)
         out = F.relu(out)
         action = F.tanh(self.fc3(out))
@@ -50,12 +53,13 @@ class critic(nn.Module):
         super(critic, self).__init__()
         self.dist_info = dist_info
 
-        self.fc1 = nn.Linear(state_size, 400)
+        self.fc1 = nn.Linear(state_size, 64)
         #self.bn1 = nn.BatchNorm1d(300)
-        self.fc2 = nn.Linear(400 + action_size, 300)
+        self.fc2 = nn.Linear(64 + action_size, 64)
+        self.fc2_2 = nn.Linear(64 , 64)
 
         if self.dist_info['type'] == 'categorical':
-            self.fc3 = nn.Linear(300, self.dist_info['n_atoms'])
+            self.fc3 = nn.Linear(64, self.dist_info['n_atoms'])
         elif self.dist_info['type'] == 'mixture_of_gaussian':
             # TODO
             pass
@@ -65,6 +69,7 @@ class critic(nn.Module):
     def init_weights(self, init_w=10e-3):
         self.fc1.weight.data = fanin_init(self.fc1.weight.data.size())
         self.fc2.weight.data = fanin_init(self.fc2.weight.data.size())
+        self.fc2_2.weight.data = fanin_init(self.fc2_2.weight.data.size())
         self.fc3.weight.data.normal_(0, 3e-4)
 
 
@@ -73,6 +78,7 @@ class critic(nn.Module):
         #out = self.bn1(out)
         out = F.relu(out)
         out = F.relu(self.fc2(torch.cat([out, action], 1)))
+        out = F.relu(self.fc2_2(out))
         if self.dist_info['type'] == 'categorical':
             out = F.softmax(self.fc3(out), dim=1)   # Probability distribution over n_atom q_values
             #out = self.fc3(out)

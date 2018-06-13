@@ -140,43 +140,48 @@ class DDPG:
         return m_prob
 
     def reproject2(self, target_z_dist, rewards, terminates):
+        try:
         #next_distr = next_distr_v.data.cpu().numpy()
-        rewards = rewards.reshape(-1)
-        terminates = terminates.reshape(-1).astype(np.int64)
-        #dones_mask = dones_mask_t.cpu().numpy().astype(np.bool)
-        #batch_size = len(rewards)
-        proj_distr = np.zeros((self.batch_size, self.n_atoms), dtype=np.float32)
 
-        #pdb.set_trace()
+            rewards = rewards.reshape(-1)
+            terminates = terminates.reshape(-1).astype(bool)
+            #dones_mask = dones_mask_t.cpu().numpy().astype(np.bool)
+            #batch_size = len(rewards)
+            proj_distr = np.zeros((self.batch_size, self.n_atoms), dtype=np.float32)
 
-        for atom in range(self.n_atoms):
-            tz_j = np.minimum(self.v_max, np.maximum(self.v_min, rewards + (self.v_min + atom * self.delta) * self.gamma))
-            b_j = (tz_j - self.v_min) / self.delta
-            l = np.floor(b_j).astype(np.int64)
-            u = np.ceil(b_j).astype(np.int64)
-            eq_mask = u == l
-            proj_distr[eq_mask, l[eq_mask]] += target_z_dist[eq_mask, atom]
-            ne_mask = u != l
-            proj_distr[ne_mask, l[ne_mask]] += target_z_dist[ne_mask, atom] * (u - b_j)[ne_mask]
-            proj_distr[ne_mask, u[ne_mask]] += target_z_dist[ne_mask, atom] * (b_j - l)[ne_mask]
+            #pdb.set_trace()
 
-        if terminates.any():
-            proj_distr[terminates] = 0.0
-            tz_j = np.minimum(self.v_max, np.maximum(self.v_min, rewards[terminates]))
-            b_j = (tz_j - self.v_min) / self.delta
-            l = np.floor(b_j).astype(np.int64)
-            u = np.ceil(b_j).astype(np.int64)
-            eq_mask = u == l
-            eq_dones = terminates.copy()
-            eq_dones[terminates] = eq_mask
-            if eq_dones.any():
-                proj_distr[eq_dones, l] = 1.0
-            ne_mask = u != l
-            ne_dones = terminates.copy()
-            ne_dones[terminates] = ne_mask
-            if ne_dones.any():
-                proj_distr[ne_dones, l] = (u - b_j)[ne_mask]
-                proj_distr[ne_dones, u] = (b_j - l)[ne_mask]
+            for atom in range(self.n_atoms):
+                tz_j = np.minimum(self.v_max, np.maximum(self.v_min, rewards + (self.v_min + atom * self.delta) * self.gamma))
+                b_j = (tz_j - self.v_min) / self.delta
+                l = np.floor(b_j).astype(np.int64)
+                u = np.ceil(b_j).astype(np.int64)
+                eq_mask = (u == l).astype(bool)
+                proj_distr[eq_mask, l[eq_mask]] += target_z_dist[eq_mask, atom]
+                ne_mask = (u != l).astype(bool)
+                proj_distr[ne_mask, l[ne_mask]] += target_z_dist[ne_mask, atom] * (u - b_j)[ne_mask]
+                proj_distr[ne_mask, u[ne_mask]] += target_z_dist[ne_mask, atom] * (b_j - l)[ne_mask]
+
+            if terminates.any():
+                proj_distr[terminates] = 0.0
+                tz_j = np.minimum(self.v_max, np.maximum(self.v_min, rewards[terminates]))
+                b_j = (tz_j - self.v_min) / self.delta
+                l = np.floor(b_j).astype(np.int64)
+                u = np.ceil(b_j).astype(np.int64)
+                eq_mask = (u == l).astype(bool)
+                eq_dones = terminates.copy()
+                eq_dones[terminates] = eq_mask
+                if eq_dones.any():
+                    proj_distr[eq_dones, l] = 1.0
+                ne_mask = (u != l).astype(bool)
+                ne_dones = terminates.copy()
+                ne_dones[terminates] = ne_mask.astype(bool)
+                if ne_dones.any():
+                    proj_distr[ne_dones, l] = (u - b_j)[ne_mask]
+                    proj_distr[ne_dones, u] = (b_j - l)[ne_mask]
+        except Exception as e:
+            print(e)
+            bp()
         return proj_distr
 
     def sample(self, batch_size=None):
