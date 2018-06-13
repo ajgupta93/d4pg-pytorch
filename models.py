@@ -15,12 +15,12 @@ def fanin_init(size, fanin=None):
 class actor(nn.Module):
     def __init__(self, input_size, output_size):
         super(actor, self).__init__()
-        self.fc1 = nn.Linear(input_size, 64)
+        self.fc1 = nn.Linear(input_size, 256)
         #self.bn1 = nn.BatchNorm1d(400)
-        self.fc2 = nn.Linear(64, 64)
-        self.fc2_2 = nn.Linear(64, 64)
+        self.fc2 = nn.Linear(256, 256)
+        self.fc2_2 = nn.Linear(256, 256)
         #self.bn2 = nn.BatchNorm1d(400)
-        self.fc3 = nn.Linear(64, output_size)
+        self.fc3 = nn.Linear(256, output_size)
         self.init_weights()
     
     def init_weights(self, init_w=10e-3):
@@ -53,13 +53,13 @@ class critic(nn.Module):
         super(critic, self).__init__()
         self.dist_info = dist_info
 
-        self.fc1 = nn.Linear(state_size, 64)
+        self.fc1 = nn.Linear(state_size, 256)
         #self.bn1 = nn.BatchNorm1d(300)
-        self.fc2 = nn.Linear(64 + action_size, 64)
-        self.fc2_2 = nn.Linear(64 , 64)
+        self.fc2 = nn.Linear(256 + action_size, 256)
+        self.fc2_2 = nn.Linear(256 , 256)
 
         if self.dist_info['type'] == 'categorical':
-            self.fc3 = nn.Linear(64, self.dist_info['n_atoms'])
+            self.fc3 = nn.Linear(256, self.dist_info['n_atoms'])
         elif self.dist_info['type'] == 'mixture_of_gaussian':
             # TODO
             pass

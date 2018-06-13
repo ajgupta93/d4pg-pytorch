@@ -133,7 +133,7 @@ def global_model_eval(global_model, global_count):
         time.sleep(10)
 
 
-def addExperienceToBuffer(ddpg, replay_buffer, env, her=False, her_ratio=0.6):
+def addExperienceToBuffer(ddpg, replay_buffer, env, her=False, her_ratio=0.8):
     # add experiences to buffer
     episode_buffer = []
     state = env.reset()
@@ -144,7 +144,7 @@ def addExperienceToBuffer(ddpg, replay_buffer, env, her=False, her_ratio=0.6):
         action = to_numpy(ddpg.actor(inp))
         action = np.clip( action + ddpg.noise.sample(), -1, 1)
         next_state, reward, done, info = env.step(action)
-        done = info['is_success']
+        done = bool(info['is_success'])
         episode_buffer.append([state, action, reward, next_state, done, info])
         state = next_state
         if done:
@@ -164,24 +164,23 @@ def addExperienceToBuffer(ddpg, replay_buffer, env, her=False, her_ratio=0.6):
             # cater to her_ratio
             if np.random.uniform() < her_ratio:
                 # all the her sampling code should be under this IF condition, however currently it is ignored
-                pass
 
-            # Goal strategy: future || other possible strategies: final
-            future_transition = episode_buffer[np.random.randint(t, len(episode_buffer))]
-            dummy_goal = future_transition[3]['achieved_goal']
+                # Goal strategy: future || other possible strategies: final
+                future_transition = episode_buffer[np.random.randint(t, len(episode_buffer))]
+                dummy_goal = future_transition[3]['achieved_goal']
 
-            her_curr_state = np.concatenate((episode_buffer[t][0]['observation'], dummy_goal))
-            her_next_state = np.concatenate((episode_buffer[t][3]['observation'], dummy_goal))
+                her_curr_state = np.concatenate((episode_buffer[t][0]['observation'], dummy_goal))
+                her_next_state = np.concatenate((episode_buffer[t][3]['observation'], dummy_goal))
 
-            # get update reward
-            substitute_goal = dummy_goal.copy()
-            her_reward = env.compute_reward( episode_buffer[t][3]['achieved_goal'], substitute_goal, episode_buffer[t][5] )
-            # env.state = her_curr_state
-            # _, her_reward, her_done, _ = env.step(future_transition[1])
+                # get update reward
+                substitute_goal = dummy_goal.copy()
+                her_reward = env.compute_reward( episode_buffer[t][3]['achieved_goal'], substitute_goal, episode_buffer[t][5] )
+                # env.state = her_curr_state
+                # _, her_reward, her_done, _ = env.step(future_transition[1])
 
-            # Add her-transition to replay buffer
-            her_done = True if her_reward == 0. else False #(substitute_goal == episode_buffer[t][3]['achieved_goal']).all()
-            #replay_buffer.add(her_curr_state, action, her_reward, her_next_state, her_done)
+                # Add her-transition to replay buffer
+                her_done = True if her_reward == 0. else False #(substitute_goal == episode_buffer[t][3]['achieved_goal']).all()
+                replay_buffer.add(her_curr_state, action, her_reward, her_next_state, her_done)
 #    bp()
 
 
@@ -202,7 +201,7 @@ class Worker(object):
         self.ddpg.actor.eval()
         # bp()
         for i in range(5000//args.max_steps):
-            addExperienceToBuffer(self.ddpg, self.ddpg.replayBuffer, self.env, her=False, her_ratio=0.6)
+            addExperienceToBuffer(self.ddpg, self.ddpg.replayBuffer, self.env, her=args.her, her_ratio=0.8)
         # bp()
         return
 
@@ -299,7 +298,7 @@ class Worker(object):
         for i in range(args.n_eps):
             for cycle in range(50):
                 for episode_count in range(16):
-                    addExperienceToBuffer(self.ddpg, self.ddpg.replayBuffer, self.env, her=False, her_ratio=0.8)
+                    addExperienceToBuffer(self.ddpg, self.ddpg.replayBuffer, self.env, her=args.her, her_ratio=0.8)
                 for j in range(40):
                     self.ddpg.actor.train()
                     self.ddpg.train(global_ddpg)
@@ -324,7 +323,7 @@ class Worker(object):
                         action = to_numpy(self.ddpg.actor(to_tensor(state))).reshape(-1)
                         action = np.clip(action, -1.0, 1.0)
                         next_state, reward, done, info = self.env.step(action)
-                        done = info['is_success']
+                        done = bool(info['is_success'])
                         total_reward_test += reward
                         episode_rewards.append((j,reward))
                         episode_states.append((j,state))
