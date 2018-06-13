@@ -56,13 +56,14 @@ parser.add_argument('--her', default=0, type=int, help='Control variable for Hin
 args = parser.parse_args()
 
 
-writer = SummaryWriter('runs/exp' +
-                        ( '_' + args.env + '_') +
-                        ('_PER' if args.p_replay else '' ) +        # PER
-                        ('_HER' if args.her else '' ) +        # HER
-                        ( '_' + str(args.n_steps) + 'N' )  +        # N-steps
-                        ( '_' + str( args.n_workers if args.multithread else 1 ) + 'Workers' )# N-workers
-                       )
+path = 'runs/exp' + \
+                    ( '_' + args.env + '_') + \
+                    ('_PER' if args.p_replay else '' ) + \
+                    ('_HER' if args.her else '' ) +  \
+                    ( '_' + str(args.n_steps) + 'N' )  +  \
+                    ( '_' + str( args.n_workers if args.multithread else 1 ) + 'Workers' )
+
+writer = SummaryWriter(path)
 
 env = NormalizeAction(gym.make(args.env).env)
 env._max_episode_steps = args.max_steps
@@ -363,8 +364,8 @@ class Worker(object):
                 #     pickle.dump(self.train_logs, fHandle, protocol=pickle.HIGHEST_PROTOCOL)
 
             # self.ddpg.noise.reset()
-            torch.save(self.ddpg.actor.state_dict(), env_name+'actor.pth')
-            torch.save(self.ddpg.critic.state_dict(), env_name+'critic.pth')
+                torch.save(self.ddpg.actor.state_dict(), path+'/actor.pth')
+                torch.save(self.ddpg.critic.state_dict(), path+'/critic.pth')
 
 
 if __name__ == '__main__':
