@@ -107,7 +107,7 @@ class DDPG:
                 action = np.clip(action + self.noise.sample(), -1, 1)
                 next_state, reward, done, info = self.env.step(action)
                 o_n, a_g2, done, = next_state['observation'], next_state['achieved_goal'], bool(info['is_success'])
-                done = bool(info['is_success'])
+                done = False #bool(info['is_success'])
 
                 ##### o: current state, o_n: next_state, a_g: achieved goal(at current state), a_g2: achieved goal(next state)
                 ##### d_g: the desired goal(target)
@@ -146,12 +146,13 @@ class DDPG:
             curr_transition = sampled_transitions[i].copy()
             if is_her:
                 # Replace current goal by any future goal
-                # curr_transition['r'] = self.env.compute_reward(curr_transition['a_g2'],
-                #                                                future[i]['a_g2'].copy(),
-                #                                                curr_transition['info'])
+                curr_transition['r'] = self.env.compute_reward(curr_transition['a_g2'],
+                                                               future[i]['a_g2'].copy(),
+                                                               curr_transition['info'])
                 curr_transition['d_g'] = future[i]['a_g2'].copy()
                 # curr_transition['done'] = bool(curr_transition['r'] == 0)  # reward    -1 desired goal not reached,
-                                                                           #            0 reached
+                                                                                      # 0 reached
+                # pass
             states.append(np.concatenate((curr_transition['o'], curr_transition['d_g'])))
             actions.append(curr_transition['act'])
             rewards.append(curr_transition['r'])

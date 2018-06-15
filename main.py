@@ -131,7 +131,7 @@ class Worker(object):
         self.ddpg = DDPG(obs_dim=obs_dim, act_dim=act_dim, env=self.env, memory_size=args.rmsize,\
                           batch_size=args.bsize, tau=args.tau, critic_dist_info=critic_dist_info, \
                           prioritized_replay=args.p_replay, gamma = args.gamma, n_steps = args.n_steps,\
-                          her=args.her, her_ratio=args.her_ratio)
+                          her=args.her, her_ratio=args.her_ratio, n_episode_per_worker= 5)
         self.ddpg.assign_global_optimizer(optimizer_global_actor, optimizer_global_critic)
         print('Intialized worker :',self.name)
 
@@ -150,13 +150,14 @@ class Worker(object):
         step_counter = 0
         for i in range(args.n_eps):
             for cycle in range(50):
-                self.ddpg.add_new_episodes(2)
+                self.ddpg.add_new_episodes(10)
+                self.ddpg.update_target_parameters()
                 for j in range(40):  # type: int
                     self.ddpg.actor.train()
                     self.ddpg.train(global_ddpg, update_target=False)
                     step_counter += 1
                     global_count += 1
-                    if not j%10:
+                    if j%5 == 0:
                         self.ddpg.update_target_parameters()
 
                 success = 0
